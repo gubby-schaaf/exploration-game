@@ -82,7 +82,7 @@
                 this.x = x;
                 this.y = y;
                 this.direction = direction;
-                this.lifetime = 8; // frames
+                this.lifetime = 8;
                 this.maxLifetime = 8;
             }
 
@@ -98,7 +98,6 @@
                 ctx.fillStyle = `rgba(255, 200, 0, ${alpha * 0.8})`;
                 ctx.fillRect(this.x - game.camera.x - size/2, this.y - game.camera.y - size/2, size, size);
                 
-                // Add a bright border
                 ctx.strokeStyle = `rgba(255, 255, 100, ${alpha})`;
                 ctx.lineWidth = 3;
                 ctx.strokeRect(this.x - game.camera.x - size/2, this.y - game.camera.y - size/2, size, size);
@@ -110,8 +109,8 @@
             constructor(x, y) {
                 this.x = x;
                 this.y = y;
-                this.width = 24;
-                this.height = 24;
+                this.width = 20;
+                this.height = 20;
                 this.vx = 0;
                 this.vy = 0;
                 this.speed = 3;
@@ -121,8 +120,9 @@
                 this.attackRange = 50;
                 this.attackDamage = 15;
                 this.projectileCooldown = 0;
-                this.direction = 0; // 0=down, 1=up, 2=left, 3=right
+                this.direction = 0;
                 this.attackFlash = 0;
+                this.bounceOffset = 0;
             }
 
             update() {
@@ -134,6 +134,9 @@
                 this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
                 this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
 
+                // Bounce animation
+                this.bounceOffset = Math.sin(game.gameTime * 0.1) * 2;
+
                 // Cooldowns
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (this.projectileCooldown > 0) this.projectileCooldown--;
@@ -141,22 +144,50 @@
             }
 
             draw(ctx) {
-                // Draw player body
-                ctx.fillStyle = this.attackFlash > 0 ? '#ffff00' : '#00ff00';
-                ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.width, this.height);
+                const drawX = this.x - game.camera.x;
+                const drawY = this.y - game.camera.y + this.bounceOffset;
 
-                // Draw direction indicator (head)
-                ctx.fillStyle = '#ffffff';
-                const headSize = 4;
-                let headX = this.x + this.width/2 - game.camera.x;
-                let headY = this.y + this.height/2 - game.camera.y;
+                // Draw body (tan/beige color)
+                ctx.fillStyle = this.attackFlash > 0 ? '#ffff99' : '#e6d4a8';
+                ctx.beginPath();
+                ctx.arc(drawX + this.width/2, drawY + this.width/2, this.width/2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw outline
+                ctx.strokeStyle = '#8b7355';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                // Draw left eye
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(drawX + this.width/2 - 4, drawY + 6, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw right eye
+                ctx.beginPath();
+                ctx.arc(drawX + this.width/2 + 4, drawY + 6, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw mouth (simple line)
+                ctx.strokeStyle = '#000000';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(drawX + this.width/2 - 3, drawY + 12);
+                ctx.lineTo(drawX + this.width/2 + 3, drawY + 12);
+                ctx.stroke();
+
+                // Draw direction indicator (hat/direction marker)
+                ctx.fillStyle = '#ff6600';
+                let markerX = drawX + this.width/2;
+                let markerY = drawY + this.width/2;
                 
-                if (this.direction === 0) headY += 8; // down
-                else if (this.direction === 1) headY -= 8; // up
-                else if (this.direction === 2) headX -= 8; // left
-                else if (this.direction === 3) headX += 8; // right
+                if (this.direction === 0) markerY += 8; // down
+                else if (this.direction === 1) markerY -= 8; // up
+                else if (this.direction === 2) markerX -= 8; // left
+                else if (this.direction === 3) markerX += 8; // right
 
-                ctx.fillRect(headX - headSize/2, headY - headSize/2, headSize, headSize);
+                ctx.fillRect(markerX - 2, markerY - 2, 4, 4);
             }
 
             melee() {
@@ -164,21 +195,18 @@
                 this.attackCooldown = 20;
                 this.attackFlash = 8;
 
-                // Calculate offset in direction of facing
                 let offsetX = 0, offsetY = 0;
-                if (this.direction === 0) offsetY = this.attackRange; // down
-                else if (this.direction === 1) offsetY = -this.attackRange; // up
-                else if (this.direction === 2) offsetX = -this.attackRange; // left
-                else if (this.direction === 3) offsetX = this.attackRange; // right
+                if (this.direction === 0) offsetY = this.attackRange;
+                else if (this.direction === 1) offsetY = -this.attackRange;
+                else if (this.direction === 2) offsetX = -this.attackRange;
+                else if (this.direction === 3) offsetX = this.attackRange;
 
-                // Create attack effect
                 game.attacks.push(new AttackEffect(
                     this.x + this.width/2 + offsetX,
                     this.y + this.height/2 + offsetY,
                     this.direction
                 ));
 
-                // Damage enemies in range
                 for (let enemy of game.enemies) {
                     const dx = enemy.x - this.x;
                     const dy = enemy.y - this.y;
@@ -188,7 +216,6 @@
                     }
                 }
 
-                // Damage boss in range
                 if (game.boss && game.boss.active) {
                     const dx = game.boss.x - this.x;
                     const dy = game.boss.y - this.y;
@@ -204,10 +231,10 @@
                 this.projectileCooldown = 10;
 
                 const directions = [
-                    [0, -1], // up
-                    [0, 1],  // down
-                    [-1, 0], // left
-                    [1, 0]   // right
+                    [0, -1],
+                    [0, 1],
+                    [-1, 0],
+                    [1, 0]
                 ];
 
                 for (let dir of directions) {
@@ -227,19 +254,20 @@
             }
         }
 
-        // Enemy class
+        // Enemy class (Slime)
         class Enemy {
             constructor(x, y, type = 'normal') {
                 this.x = x;
                 this.y = y;
-                this.width = 20;
-                this.height = 20;
+                this.width = 24;
+                this.height = 24;
                 this.health = type === 'strong' ? 30 : 15;
                 this.maxHealth = this.health;
                 this.speed = type === 'strong' ? 1.5 : 1;
                 this.type = type;
                 this.attackCooldown = 0;
                 this.damage = type === 'strong' ? 15 : 10;
+                this.bounceTime = Math.random() * 100;
             }
 
             update() {
@@ -253,6 +281,8 @@
                     this.y += (dy / dist) * this.speed;
                 }
 
+                this.bounceTime += 1;
+
                 // Attack player if close
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (dist < 40 && this.attackCooldown === 0) {
@@ -262,13 +292,48 @@
             }
 
             draw(ctx) {
-                ctx.fillStyle = this.type === 'strong' ? '#ff6600' : '#ff0000';
-                ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.width, this.height);
+                const drawX = this.x - game.camera.x;
+                const drawY = this.y - game.camera.y;
+                const bounceOffset = Math.sin(this.bounceTime * 0.15) * 3;
+
+                // Slime body color
+                const bodyColor = this.type === 'strong' ? '#ff8800' : '#00ff00';
+                const outlineColor = this.type === 'strong' ? '#cc6600' : '#00cc00';
+
+                // Draw main body (jellybean/slime shape)
+                ctx.fillStyle = bodyColor;
+                ctx.beginPath();
+                ctx.ellipse(drawX + this.width/2, drawY + this.height/2 + bounceOffset, this.width/2, this.height/2.2, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw outline
+                ctx.strokeStyle = outlineColor;
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw wobble/shine effect
+                ctx.fillStyle = `rgba(255, 255, 255, 0.3)`;
+                ctx.beginPath();
+                ctx.ellipse(drawX + this.width/2 - 3, drawY + this.height/2 - 3 + bounceOffset, this.width/6, this.height/6, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw left eye
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(drawX + this.width/2 - 5, drawY + this.height/2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw right eye
+                ctx.beginPath();
+                ctx.arc(drawX + this.width/2 + 5, drawY + this.height/2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
+                ctx.fill();
 
                 // Health bar
+                ctx.fillStyle = '#ff0000';
+                ctx.fillRect(drawX, drawY - 8, this.width, 3);
                 ctx.fillStyle = '#00ff00';
                 const healthBarWidth = this.width * (this.health / this.maxHealth);
-                ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y - 5, healthBarWidth, 3);
+                ctx.fillRect(drawX, drawY - 8, healthBarWidth, 3);
             }
 
             takeDamage(amount) {
@@ -296,7 +361,6 @@
             update() {
                 if (!this.active) return;
 
-                // Chase player
                 const dx = game.player.x - this.x;
                 const dy = game.player.y - this.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
@@ -309,26 +373,22 @@
                     this.y -= (dy / dist) * (this.speed * 0.5);
                 }
 
-                // Boss attacks
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (dist < 150 && this.attackCooldown === 0) {
                     this.attack();
                     this.attackCooldown = 90;
                 }
 
-                // Phase 2 at 50% health
                 if (this.health < this.maxHealth * 0.5) {
                     this.phase = 2;
                     this.speed = 1.5;
                 }
 
-                // World boundaries
                 this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
                 this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
             }
 
             attack() {
-                // Spawn projectiles in circle around boss
                 const projectileCount = this.phase === 1 ? 4 : 8;
                 for (let i = 0; i < projectileCount; i++) {
                     const angle = (Math.PI * 2 * i) / projectileCount;
@@ -349,7 +409,6 @@
                 ctx.fillStyle = '#ff00ff';
                 ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.width, this.height);
 
-                // Health bar
                 ctx.fillStyle = '#ff0000';
                 ctx.fillRect(this.x - game.camera.x - 5, this.y - game.camera.y - 15, this.width + 10, 8);
                 ctx.fillStyle = '#00ff00';
@@ -383,22 +442,18 @@
                 this.y += this.vy;
                 this.lifetime--;
 
-                // Check collisions
                 if (!this.isEnemyProjectile) {
-                    // Player projectile hits enemies
                     for (let enemy of game.enemies) {
                         if (this.collidesWith(enemy)) {
                             enemy.takeDamage(this.damage);
                             this.lifetime = 0;
                         }
                     }
-                    // Player projectile hits boss
                     if (game.boss && game.boss.active && this.collidesWith(game.boss)) {
                         game.boss.takeDamage(this.damage);
                         this.lifetime = 0;
                     }
                 } else {
-                    // Enemy projectile hits player
                     if (this.collidesWith(game.player)) {
                         game.player.takeDamage(this.damage);
                         this.lifetime = 0;
@@ -417,7 +472,6 @@
             }
         }
 
-        // Input handling
         const keys = {};
         window.addEventListener('keydown', (e) => {
             keys[e.key.toLowerCase()] = true;
@@ -434,7 +488,6 @@
             game.player.melee();
         });
 
-        // Update player movement
         function handleInput() {
             game.player.vx = 0;
             game.player.vy = 0;
@@ -458,20 +511,16 @@
             }
         }
 
-        // Spawn boss
         function spawnBoss() {
             game.boss = new Boss(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
         }
 
-        // Update game
         function update() {
             game.gameTime++;
             handleInput();
 
-            // Player update
             game.player.update();
 
-            // Enemy spawning
             if (game.enemies.length < 5 + game.wave * 2 && Math.random() < game.enemySpawnRate) {
                 const spawnX = Math.random() * WORLD_WIDTH;
                 const spawnY = Math.random() * WORLD_HEIGHT;
@@ -479,12 +528,10 @@
                 game.enemies.push(new Enemy(spawnX, spawnY, type));
             }
 
-            // Spawn boss at wave 5
             if (game.wave === 5 && !game.boss) {
                 spawnBoss();
             }
 
-            // Update enemies
             for (let i = game.enemies.length - 1; i >= 0; i--) {
                 game.enemies[i].update();
                 if (game.enemies[i].health <= 0) {
@@ -494,12 +541,10 @@
                 }
             }
 
-            // Update boss
             if (game.boss) {
                 game.boss.update();
             }
 
-            // Update projectiles
             for (let i = game.projectiles.length - 1; i >= 0; i--) {
                 game.projectiles[i].update();
                 if (game.projectiles[i].lifetime <= 0) {
@@ -507,7 +552,6 @@
                 }
             }
 
-            // Update attack effects
             for (let i = game.attacks.length - 1; i >= 0; i--) {
                 game.attacks[i].update();
                 if (game.attacks[i].lifetime <= 0) {
@@ -515,13 +559,11 @@
                 }
             }
 
-            // Camera follow player
             game.camera.x = game.player.x - canvas.width / 2;
             game.camera.y = game.player.y - canvas.height / 2;
             game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
             game.camera.y = Math.max(0, Math.min(game.camera.y, WORLD_HEIGHT - canvas.height));
 
-            // Update UI
             document.getElementById('health').textContent = Math.max(0, Math.floor(game.player.health));
             document.getElementById('enemies').textContent = game.enemies.length;
 
@@ -532,20 +574,16 @@
                 document.getElementById('bossHealth').style.display = 'none';
             }
 
-            // Game over
             if (game.player.health <= 0) {
                 alert(`Game Over! Wave: ${Math.floor(game.wave)}`);
                 location.reload();
             }
         }
 
-        // Draw game
         function draw() {
-            // Clear canvas
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw world background tiles
             ctx.fillStyle = '#222222';
             for (let x = Math.floor(game.camera.x / 32); x < Math.ceil((game.camera.x + canvas.width) / 32); x++) {
                 for (let y = Math.floor(game.camera.y / 32); y < Math.ceil((game.camera.y + canvas.height) / 32); y++) {
@@ -555,7 +593,6 @@
                 }
             }
 
-            // Draw game objects
             for (let enemy of game.enemies) {
                 enemy.draw(ctx);
             }
@@ -568,14 +605,12 @@
                 projectile.draw(ctx);
             }
 
-            // Draw attack effects
             for (let attack of game.attacks) {
                 attack.draw(ctx);
             }
 
             game.player.draw(ctx);
 
-            // Draw boss warning when near
             if (game.boss && !game.boss.active) {
                 ctx.fillStyle = '#ffff00';
                 ctx.font = '24px Arial';
@@ -583,14 +618,12 @@
             }
         }
 
-        // Game loop
         function gameLoop() {
             update();
             draw();
             requestAnimationFrame(gameLoop);
         }
 
-        // Initialize game
         game.player = new Player(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
         gameLoop();
     </script>
