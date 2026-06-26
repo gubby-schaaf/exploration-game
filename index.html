@@ -30,6 +30,16 @@
             padding: 10px;
             border: 1px solid #fff;
         }
+        #ammo {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: #ffff00;
+            font-size: 18px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border: 2px solid #ffff00;
+        }
         #bossHealth {
             position: absolute;
             top: 10px;
@@ -49,6 +59,12 @@
         <div>Health: <span id="health">100</span>/100</div>
         <div>Enemies: <span id="enemies">0</span></div>
         <div>WASD or Arrow Keys to move | Click to melee | Space to shoot</div>
+    </div>
+    <div id="ammo">
+        Arrows: <span id="ammoCount">3</span>/3
+        <div id="reloadBar" style="display: none; margin-top: 5px;">
+            Reloading: <span id="reloadPercent">0</span>%
+        </div>
     </div>
     <div id="bossHealth">
         <div>Boss Health: <span id="bossHealthBar">0</span>/1000</div>
@@ -123,6 +139,13 @@
                 this.direction = 0;
                 this.attackFlash = 0;
                 this.bounceOffset = 0;
+                
+                // Ammo system
+                this.maxAmmo = 3;
+                this.currentAmmo = 3;
+                this.isReloading = false;
+                this.reloadTime = 120; // 2 seconds at 60fps
+                this.reloadProgress = 0;
             }
 
             update() {
@@ -141,6 +164,16 @@
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (this.projectileCooldown > 0) this.projectileCooldown--;
                 if (this.attackFlash > 0) this.attackFlash--;
+
+                // Reload system
+                if (this.isReloading) {
+                    this.reloadProgress++;
+                    if (this.reloadProgress >= this.reloadTime) {
+                        this.currentAmmo = this.maxAmmo;
+                        this.isReloading = false;
+                        this.reloadProgress = 0;
+                    }
+                }
             }
 
             draw(ctx) {
@@ -227,25 +260,37 @@
             }
 
             shoot() {
+                // Check if out of ammo - start reload
+                if (this.currentAmmo === 0) {
+                    if (!this.isReloading) {
+                        this.isReloading = true;
+                        this.reloadProgress = 0;
+                    }
+                    return;
+                }
+
                 if (this.projectileCooldown > 0) return;
                 this.projectileCooldown = 10;
 
-                const directions = [
-                    [0, -1],
-                    [0, 1],
-                    [-1, 0],
-                    [1, 0]
-                ];
+                // Fire projectile in direction facing
+                let vx = 0, vy = 0;
+                if (this.direction === 0) vy = 5; // down
+                else if (this.direction === 1) vy = -5; // up
+                else if (this.direction === 2) vx = -5; // left
+                else if (this.direction === 3) vx = 5; // right
 
-                for (let dir of directions) {
-                    game.projectiles.push(new Projectile(
-                        this.x + this.width/2,
-                        this.y + this.height/2,
-                        dir[0] * 5,
-                        dir[1] * 5,
-                        10
-                    ));
-                }
+                game.projectiles.push(new Projectile(
+                    this.x + this.width/2,
+                    this.y + this.height/2,
+                    vx,
+                    vy,
+                    25
+                ));
+
+                this.currentAmmo--;
+
+                // Update UI
+                document.getElementById('ammoCount').textContent = this.currentAmmo;
             }
 
             takeDamage(amount) {
@@ -566,6 +611,15 @@
 
             document.getElementById('health').textContent = Math.max(0, Math.floor(game.player.health));
             document.getElementById('enemies').textContent = game.enemies.length;
+
+            // Update ammo UI
+            if (game.player.isReloading) {
+                document.getElementById('reloadBar').style.display = 'block';
+                const percent = Math.floor((game.player.reloadProgress / game.player.reloadTime) * 100);
+                document.getElementById('reloadPercent').textContent = percent;
+            } else {
+                document.getElementById('reloadBar').style.display = 'none';
+            }
 
             if (game.boss && game.boss.active) {
                 document.getElementById('bossHealth').style.display = 'block';
