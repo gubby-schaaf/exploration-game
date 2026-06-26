@@ -85,12 +85,35 @@
             enemies: [],
             projectiles: [],
             attacks: [],
+            footprints: [],
             boss: null,
             camera: { x: 0, y: 0 },
             wave: 1,
             enemySpawnRate: 0.02,
             gameTime: 0
         };
+
+        // Footprint class
+        class Footprint {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.lifetime = 120; // 2 seconds
+                this.maxLifetime = 120;
+            }
+
+            update() {
+                this.lifetime--;
+            }
+
+            draw(ctx) {
+                const alpha = this.lifetime / this.maxLifetime;
+                ctx.fillStyle = `rgba(100, 150, 80, ${alpha * 0.4})`;
+                ctx.beginPath();
+                ctx.ellipse(this.x - game.camera.x, this.y - game.camera.y, 8, 6, 0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
 
         // Attack Effect class
         class AttackEffect {
@@ -139,12 +162,13 @@
                 this.direction = 0;
                 this.attackFlash = 0;
                 this.bounceOffset = 0;
+                this.lastFootprintTime = 0;
                 
                 // Ammo system
                 this.maxAmmo = 3;
                 this.currentAmmo = 3;
                 this.isReloading = false;
-                this.reloadTime = 120; // 2 seconds at 60fps
+                this.reloadTime = 120;
                 this.reloadProgress = 0;
             }
 
@@ -159,6 +183,12 @@
 
                 // Bounce animation
                 this.bounceOffset = Math.sin(game.gameTime * 0.1) * 2;
+
+                // Create footprints when moving
+                if ((this.vx !== 0 || this.vy !== 0) && game.gameTime - this.lastFootprintTime > 8) {
+                    game.footprints.push(new Footprint(this.x + this.width/2, this.y + this.height/2));
+                    this.lastFootprintTime = game.gameTime;
+                }
 
                 // Cooldowns
                 if (this.attackCooldown > 0) this.attackCooldown--;
@@ -260,7 +290,6 @@
             }
 
             shoot() {
-                // Check if out of ammo - start reload
                 if (this.currentAmmo === 0) {
                     if (!this.isReloading) {
                         this.isReloading = true;
@@ -272,12 +301,11 @@
                 if (this.projectileCooldown > 0) return;
                 this.projectileCooldown = 10;
 
-                // Fire projectile in direction facing
                 let vx = 0, vy = 0;
-                if (this.direction === 0) vy = 5; // down
-                else if (this.direction === 1) vy = -5; // up
-                else if (this.direction === 2) vx = -5; // left
-                else if (this.direction === 3) vx = 5; // right
+                if (this.direction === 0) vy = 5;
+                else if (this.direction === 1) vy = -5;
+                else if (this.direction === 2) vx = -5;
+                else if (this.direction === 3) vx = 5;
 
                 game.projectiles.push(new Projectile(
                     this.x + this.width/2,
@@ -288,8 +316,6 @@
                 ));
 
                 this.currentAmmo--;
-
-                // Update UI
                 document.getElementById('ammoCount').textContent = this.currentAmmo;
             }
 
@@ -316,7 +342,6 @@
             }
 
             update() {
-                // Chase player
                 const dx = game.player.x - this.x;
                 const dy = game.player.y - this.y;
                 const dist = Math.sqrt(dx*dx + dy*dy);
@@ -328,7 +353,6 @@
 
                 this.bounceTime += 1;
 
-                // Attack player if close
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (dist < 40 && this.attackCooldown === 0) {
                     game.player.takeDamage(this.damage);
@@ -341,39 +365,32 @@
                 const drawY = this.y - game.camera.y;
                 const bounceOffset = Math.sin(this.bounceTime * 0.15) * 3;
 
-                // Slime body color
                 const bodyColor = this.type === 'strong' ? '#ff8800' : '#00ff00';
                 const outlineColor = this.type === 'strong' ? '#cc6600' : '#00cc00';
 
-                // Draw main body (jellybean/slime shape)
                 ctx.fillStyle = bodyColor;
                 ctx.beginPath();
                 ctx.ellipse(drawX + this.width/2, drawY + this.height/2 + bounceOffset, this.width/2, this.height/2.2, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Draw outline
                 ctx.strokeStyle = outlineColor;
                 ctx.lineWidth = 2;
                 ctx.stroke();
 
-                // Draw wobble/shine effect
                 ctx.fillStyle = `rgba(255, 255, 255, 0.3)`;
                 ctx.beginPath();
                 ctx.ellipse(drawX + this.width/2 - 3, drawY + this.height/2 - 3 + bounceOffset, this.width/6, this.height/6, 0, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Draw left eye
                 ctx.fillStyle = '#000000';
                 ctx.beginPath();
                 ctx.arc(drawX + this.width/2 - 5, drawY + this.height/2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Draw right eye
                 ctx.beginPath();
                 ctx.arc(drawX + this.width/2 + 5, drawY + this.height/2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
                 ctx.fill();
 
-                // Health bar
                 ctx.fillStyle = '#ff0000';
                 ctx.fillRect(drawX, drawY - 8, this.width, 3);
                 ctx.fillStyle = '#00ff00';
@@ -604,6 +621,13 @@
                 }
             }
 
+            for (let i = game.footprints.length - 1; i >= 0; i--) {
+                game.footprints[i].update();
+                if (game.footprints[i].lifetime <= 0) {
+                    game.footprints.splice(i, 1);
+                }
+            }
+
             game.camera.x = game.player.x - canvas.width / 2;
             game.camera.y = game.player.y - canvas.height / 2;
             game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
@@ -612,7 +636,6 @@
             document.getElementById('health').textContent = Math.max(0, Math.floor(game.player.health));
             document.getElementById('enemies').textContent = game.enemies.length;
 
-            // Update ammo UI
             if (game.player.isReloading) {
                 document.getElementById('reloadBar').style.display = 'block';
                 const percent = Math.floor((game.player.reloadProgress / game.player.reloadTime) * 100);
@@ -634,19 +657,60 @@
             }
         }
 
+        function drawGrass(x, y, size) {
+            // Base grass color
+            const baseGreen = '#2d8a2d';
+            const lightGreen = '#3db83d';
+            const darkGreen = '#1f5f1f';
+            
+            // Draw grass blades with animation
+            const grassSway = Math.sin(game.gameTime * 0.05 + x * 0.1 + y * 0.1) * 0.5;
+            
+            ctx.fillStyle = baseGreen;
+            ctx.fillRect(x, y, size, size);
+            
+            // Draw some grass blades
+            ctx.strokeStyle = lightGreen;
+            ctx.lineWidth = 2;
+            
+            for (let i = 0; i < 4; i++) {
+                const bladeX = x + (size / 5) * (i + 1);
+                const bladeY = y + size / 2;
+                const bendAmount = grassSway + Math.sin(game.gameTime * 0.08 + i) * 1;
+                
+                ctx.beginPath();
+                ctx.moveTo(bladeX, bladeY + size / 4);
+                ctx.lineTo(bladeX + bendAmount, bladeY - size / 4);
+                ctx.stroke();
+            }
+            
+            // Add some variation
+            if ((x + y) % 64 === 0) {
+                ctx.fillStyle = darkGreen;
+                ctx.fillRect(x + 2, y + 2, 4, 4);
+                ctx.fillRect(x + size - 6, y + size - 6, 4, 4);
+            }
+        }
+
         function draw() {
             ctx.fillStyle = '#000000';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            ctx.fillStyle = '#222222';
-            for (let x = Math.floor(game.camera.x / 32); x < Math.ceil((game.camera.x + canvas.width) / 32); x++) {
-                for (let y = Math.floor(game.camera.y / 32); y < Math.ceil((game.camera.y + canvas.height) / 32); y++) {
-                    if ((x + y) % 2 === 0) {
-                        ctx.fillRect(x * 32 - game.camera.x, y * 32 - game.camera.y, 32, 32);
-                    }
+            // Draw grass background
+            for (let x = Math.floor(game.camera.x / TILE_SIZE); x < Math.ceil((game.camera.x + canvas.width) / TILE_SIZE); x++) {
+                for (let y = Math.floor(game.camera.y / TILE_SIZE); y < Math.ceil((game.camera.y + canvas.height) / TILE_SIZE); y++) {
+                    const screenX = x * TILE_SIZE - game.camera.x;
+                    const screenY = y * TILE_SIZE - game.camera.y;
+                    drawGrass(screenX, screenY, TILE_SIZE);
                 }
             }
 
+            // Draw footprints
+            for (let footprint of game.footprints) {
+                footprint.draw(ctx);
+            }
+
+            // Draw game objects
             for (let enemy of game.enemies) {
                 enemy.draw(ctx);
             }
