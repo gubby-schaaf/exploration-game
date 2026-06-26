@@ -94,6 +94,7 @@
                 this.direction = 0; // 0=down, 1=up, 2=left, 3=right
                 this.isAttacking = false;
                 this.attackTimer = 0;
+                this.attackDuration = 12; // Total frames for attack animation
             }
 
             update() {
@@ -109,6 +110,9 @@
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (this.projectileCooldown > 0) this.projectileCooldown--;
                 if (this.attackTimer > 0) this.attackTimer--;
+                else if (this.isAttacking) {
+                    this.isAttacking = false;
+                }
             }
 
             draw(ctx) {
@@ -116,16 +120,7 @@
                 ctx.fillStyle = '#00ff00';
                 ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.width, this.height);
 
-                // Draw attack indicator
-                if (this.isAttacking) {
-                    ctx.strokeStyle = '#ffff00';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(this.x + this.width/2 - game.camera.x, this.y + this.height/2 - game.camera.y, this.attackRange, 0, Math.PI * 2);
-                    ctx.stroke();
-                }
-
-                // Draw direction indicator
+                // Draw direction indicator (head)
                 ctx.fillStyle = '#ffffff';
                 const headSize = 4;
                 let headX = this.x + this.width/2 - game.camera.x;
@@ -137,13 +132,66 @@
                 else if (this.direction === 3) headX += 8; // right
 
                 ctx.fillRect(headX - headSize/2, headY - headSize/2, headSize, headSize);
+
+                // Draw attack animation
+                if (this.isAttacking) {
+                    this.drawAttackAnimation(ctx);
+                }
+            }
+
+            drawAttackAnimation(ctx) {
+                const centerX = this.x + this.width/2 - game.camera.x;
+                const centerY = this.y + this.height/2 - game.camera.y;
+                
+                // Animation progress (0 to 1)
+                const progress = 1 - (this.attackTimer / this.attackDuration);
+                
+                // Get direction angle
+                let angle = 0;
+                if (this.direction === 0) angle = Math.PI / 2; // down
+                else if (this.direction === 1) angle = -Math.PI / 2; // up
+                else if (this.direction === 2) angle = Math.PI; // left
+                else if (this.direction === 3) angle = 0; // right
+
+                // Swing arc (starts and ends 90 degrees on either side)
+                const swingStart = angle - Math.PI / 3;
+                const swingEnd = angle + Math.PI / 3;
+                const currentAngle = swingStart + (swingEnd - swingStart) * progress;
+
+                // Draw weapon swing arc
+                ctx.strokeStyle = '#ffff00';
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, this.attackRange * 0.8, swingStart, swingEnd, false);
+                ctx.stroke();
+
+                // Draw weapon (sword-like line at current swing position)
+                ctx.strokeStyle = '#ff8800';
+                ctx.lineWidth = 4;
+                const weaponLength = this.attackRange;
+                const weaponEndX = centerX + Math.cos(currentAngle) * weaponLength;
+                const weaponEndY = centerY + Math.sin(currentAngle) * weaponLength;
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.lineTo(weaponEndX, weaponEndY);
+                ctx.stroke();
+
+                // Draw impact circle
+                ctx.strokeStyle = '#ffff00';
+                ctx.lineWidth = 2;
+                ctx.globalAlpha = 0.5 - progress * 0.5;
+                ctx.beginPath();
+                ctx.arc(centerX, centerY, this.attackRange, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.globalAlpha = 1;
             }
 
             melee() {
                 if (this.attackCooldown > 0) return;
                 this.attackCooldown = 15;
                 this.isAttacking = true;
-                this.attackTimer = 10;
+                this.attackTimer = this.attackDuration;
 
                 // Damage enemies in range
                 for (let enemy of game.enemies) {
@@ -152,6 +200,16 @@
                     const dist = Math.sqrt(dx*dx + dy*dy);
                     if (dist < this.attackRange) {
                         enemy.takeDamage(this.attackDamage);
+                    }
+                }
+
+                // Damage boss in range
+                if (game.boss && game.boss.active) {
+                    const dx = game.boss.x - this.x;
+                    const dy = game.boss.y - this.y;
+                    const dist = Math.sqrt(dx*dx + dy*dy);
+                    if (dist < this.attackRange) {
+                        game.boss.takeDamage(this.attackDamage);
                     }
                 }
             }
