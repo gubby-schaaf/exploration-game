@@ -12,7 +12,7 @@
             justify-content: center;
             align-items: center;
             min-height: 100vh;
-            background-color: #1a1a1a;
+            background-color: #0a0a1a;
             font-family: Arial, sans-serif;
         }
         canvas {
@@ -114,7 +114,7 @@
 
             draw(ctx) {
                 const alpha = this.lifetime / this.maxLifetime;
-                ctx.fillStyle = `rgba(180, 170, 160, ${alpha * 0.6})`;
+                ctx.fillStyle = `rgba(100, 200, 255, ${alpha * 0.6})`;
                 ctx.beginPath();
                 ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.size, 0, Math.PI * 2);
                 ctx.fill();
@@ -136,7 +136,7 @@
 
             draw(ctx) {
                 const alpha = this.lifetime / this.maxLifetime;
-                ctx.fillStyle = `rgba(100, 100, 100, ${alpha * 0.5})`;
+                ctx.fillStyle = `rgba(50, 100, 150, ${alpha * 0.5})`;
                 ctx.beginPath();
                 ctx.ellipse(this.x - game.camera.x, this.y - game.camera.y, 8, 6, 0, 0, Math.PI * 2);
                 ctx.fill();
@@ -695,63 +695,84 @@
             }
         }
 
-        function drawRock(x, y, size, seed) {
-            // Base rock color
-            const baseGray = '#5a5a5a';
-            const lightGray = '#7a7a7a';
-            const darkGray = '#3a3a3a';
+        function drawCrystal(x, y, size, seed) {
+            // Determine crystal color based on seed
+            const colors = [
+                { base: '#2a5f7f', light: '#4a9fbf', dark: '#1a3f5f' },  // Blue
+                { base: '#5f2a7f', light: '#9f4abf', dark: '#3f1a5f' },  // Purple
+                { base: '#2a7f5f', light: '#4abf9f', dark: '#1a5f3f' },  // Cyan
+                { base: '#7f5f2a', light: '#bf9f4a', dark: '#5f3f1a' }   // Orange
+            ];
             
-            // Draw base tile
-            ctx.fillStyle = baseGray;
+            const color = colors[(seed / 100 | 0) % colors.length];
+            
+            // Draw base background
+            ctx.fillStyle = '#0a0a15';
             ctx.fillRect(x, y, size, size);
-
-            // Add variation based on seed
-            if (seed % 3 === 0) {
-                ctx.fillStyle = lightGray;
-                ctx.fillRect(x, y, size / 2, size / 2);
-            } else if (seed % 3 === 1) {
-                ctx.fillStyle = darkGray;
-                ctx.fillRect(x + size / 2, y + size / 2, size / 2, size / 2);
-            }
-
-            // Add pebbles/rocks
-            ctx.fillStyle = darkGray;
-            const pebbleCount = (seed % 3) + 2;
-            for (let i = 0; i < pebbleCount; i++) {
-                const px = x + ((seed + i * 7) % size);
-                const py = y + ((seed * 3 + i * 11) % size);
-                const psize = 2 + ((seed + i) % 3);
-                ctx.fillRect(px, py, psize, psize);
-            }
-
-            // Add shine/cracks
-            ctx.strokeStyle = `rgba(255, 255, 255, 0.1)`;
-            ctx.lineWidth = 1;
             
-            if (seed % 2 === 0) {
+            // Draw ground layer
+            ctx.fillStyle = color.dark;
+            ctx.fillRect(x, y + size * 0.6, size, size * 0.4);
+            
+            // Draw crystal points
+            const crystalCount = 3 + (seed % 3);
+            for (let i = 0; i < crystalCount; i++) {
+                const crystalX = x + (size / (crystalCount + 1)) * (i + 1);
+                const crystalY = y + size * 0.6;
+                const crystalHeight = size * (0.3 + (seed % 3) * 0.15);
+                const crystalWidth = size * 0.15;
+                
+                // Outer crystal
+                ctx.fillStyle = color.base;
                 ctx.beginPath();
-                ctx.moveTo(x + 4, y + 4);
-                ctx.lineTo(x + size - 4, y + size - 4);
-                ctx.stroke();
-            } else {
+                ctx.moveTo(crystalX, crystalY);
+                ctx.lineTo(crystalX + crystalWidth, crystalY - crystalHeight);
+                ctx.lineTo(crystalX + crystalWidth * 2, crystalY);
+                ctx.fill();
+                
+                // Highlight (glow)
+                const glowPhase = (game.gameTime * 0.03 + seed * 0.01) % (Math.PI * 2);
+                const glowAlpha = Math.abs(Math.sin(glowPhase)) * 0.5 + 0.2;
+                
+                ctx.fillStyle = color.light;
+                ctx.globalAlpha = glowAlpha;
                 ctx.beginPath();
-                ctx.moveTo(x + size - 4, y + 4);
-                ctx.lineTo(x + 4, y + size - 4);
+                ctx.moveTo(crystalX, crystalY - crystalHeight * 0.1);
+                ctx.lineTo(crystalX + crystalWidth * 0.5, crystalY - crystalHeight);
+                ctx.lineTo(crystalX + crystalWidth, crystalY - crystalHeight * 0.1);
+                ctx.fill();
+                ctx.globalAlpha = 1;
+                
+                // Crystal edge highlight
+                ctx.strokeStyle = color.light;
+                ctx.lineWidth = 1;
+                ctx.globalAlpha = 0.6;
+                ctx.beginPath();
+                ctx.moveTo(crystalX, crystalY);
+                ctx.lineTo(crystalX + crystalWidth, crystalY - crystalHeight);
                 ctx.stroke();
+                ctx.globalAlpha = 1;
             }
+            
+            // Add ambient glow
+            const ambientGlow = Math.sin(game.gameTime * 0.02 + seed * 0.01) * 0.15 + 0.4;
+            ctx.fillStyle = color.light;
+            ctx.globalAlpha = ambientGlow * 0.2;
+            ctx.fillRect(x, y, size, size);
+            ctx.globalAlpha = 1;
         }
 
         function draw() {
-            ctx.fillStyle = '#1a1a1a';
+            ctx.fillStyle = '#0a0a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw rocky ground
+            // Draw crystalline terrain
             for (let x = Math.floor(game.camera.x / TILE_SIZE); x < Math.ceil((game.camera.x + canvas.width) / TILE_SIZE); x++) {
                 for (let y = Math.floor(game.camera.y / TILE_SIZE); y < Math.ceil((game.camera.y + canvas.height) / TILE_SIZE); y++) {
                     const screenX = x * TILE_SIZE - game.camera.x;
                     const screenY = y * TILE_SIZE - game.camera.y;
                     const seed = x * 73856093 ^ y * 19349663;
-                    drawRock(screenX, screenY, TILE_SIZE, seed);
+                    drawCrystal(screenX, screenY, TILE_SIZE, seed);
                 }
             }
 
