@@ -86,6 +86,7 @@
             projectiles: [],
             attacks: [],
             footprints: [],
+            dust: [],
             boss: null,
             camera: { x: 0, y: 0 },
             wave: 1,
@@ -93,12 +94,39 @@
             gameTime: 0
         };
 
+        // Dust particle class
+        class DustParticle {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 2;
+                this.vy = Math.random() * -1;
+                this.lifetime = 60;
+                this.maxLifetime = 60;
+                this.size = 2 + Math.random() * 3;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.lifetime--;
+            }
+
+            draw(ctx) {
+                const alpha = this.lifetime / this.maxLifetime;
+                ctx.fillStyle = `rgba(180, 170, 160, ${alpha * 0.6})`;
+                ctx.beginPath();
+                ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
         // Footprint class
         class Footprint {
             constructor(x, y) {
                 this.x = x;
                 this.y = y;
-                this.lifetime = 120; // 2 seconds
+                this.lifetime = 120;
                 this.maxLifetime = 120;
             }
 
@@ -108,7 +136,7 @@
 
             draw(ctx) {
                 const alpha = this.lifetime / this.maxLifetime;
-                ctx.fillStyle = `rgba(100, 150, 80, ${alpha * 0.4})`;
+                ctx.fillStyle = `rgba(100, 100, 100, ${alpha * 0.5})`;
                 ctx.beginPath();
                 ctx.ellipse(this.x - game.camera.x, this.y - game.camera.y, 8, 6, 0, 0, Math.PI * 2);
                 ctx.fill();
@@ -184,9 +212,12 @@
                 // Bounce animation
                 this.bounceOffset = Math.sin(game.gameTime * 0.1) * 2;
 
-                // Create footprints when moving
+                // Create footprints and dust when moving
                 if ((this.vx !== 0 || this.vy !== 0) && game.gameTime - this.lastFootprintTime > 8) {
                     game.footprints.push(new Footprint(this.x + this.width/2, this.y + this.height/2));
+                    for (let i = 0; i < 2; i++) {
+                        game.dust.push(new DustParticle(this.x + this.width/2, this.y + this.height/2));
+                    }
                     this.lastFootprintTime = game.gameTime;
                 }
 
@@ -628,6 +659,13 @@
                 }
             }
 
+            for (let i = game.dust.length - 1; i >= 0; i--) {
+                game.dust[i].update();
+                if (game.dust[i].lifetime <= 0) {
+                    game.dust.splice(i, 1);
+                }
+            }
+
             game.camera.x = game.player.x - canvas.width / 2;
             game.camera.y = game.player.y - canvas.height / 2;
             game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
@@ -657,52 +695,69 @@
             }
         }
 
-        function drawGrass(x, y, size) {
-            // Base grass color
-            const baseGreen = '#2d8a2d';
-            const lightGreen = '#3db83d';
-            const darkGreen = '#1f5f1f';
+        function drawRock(x, y, size, seed) {
+            // Base rock color
+            const baseGray = '#5a5a5a';
+            const lightGray = '#7a7a7a';
+            const darkGray = '#3a3a3a';
             
-            // Draw grass blades with animation
-            const grassSway = Math.sin(game.gameTime * 0.05 + x * 0.1 + y * 0.1) * 0.5;
-            
-            ctx.fillStyle = baseGreen;
+            // Draw base tile
+            ctx.fillStyle = baseGray;
             ctx.fillRect(x, y, size, size);
-            
-            // Draw some grass blades
-            ctx.strokeStyle = lightGreen;
-            ctx.lineWidth = 2;
-            
-            for (let i = 0; i < 4; i++) {
-                const bladeX = x + (size / 5) * (i + 1);
-                const bladeY = y + size / 2;
-                const bendAmount = grassSway + Math.sin(game.gameTime * 0.08 + i) * 1;
-                
-                ctx.beginPath();
-                ctx.moveTo(bladeX, bladeY + size / 4);
-                ctx.lineTo(bladeX + bendAmount, bladeY - size / 4);
-                ctx.stroke();
+
+            // Add variation based on seed
+            if (seed % 3 === 0) {
+                ctx.fillStyle = lightGray;
+                ctx.fillRect(x, y, size / 2, size / 2);
+            } else if (seed % 3 === 1) {
+                ctx.fillStyle = darkGray;
+                ctx.fillRect(x + size / 2, y + size / 2, size / 2, size / 2);
             }
+
+            // Add pebbles/rocks
+            ctx.fillStyle = darkGray;
+            const pebbleCount = (seed % 3) + 2;
+            for (let i = 0; i < pebbleCount; i++) {
+                const px = x + ((seed + i * 7) % size);
+                const py = y + ((seed * 3 + i * 11) % size);
+                const psize = 2 + ((seed + i) % 3);
+                ctx.fillRect(px, py, psize, psize);
+            }
+
+            // Add shine/cracks
+            ctx.strokeStyle = `rgba(255, 255, 255, 0.1)`;
+            ctx.lineWidth = 1;
             
-            // Add some variation
-            if ((x + y) % 64 === 0) {
-                ctx.fillStyle = darkGreen;
-                ctx.fillRect(x + 2, y + 2, 4, 4);
-                ctx.fillRect(x + size - 6, y + size - 6, 4, 4);
+            if (seed % 2 === 0) {
+                ctx.beginPath();
+                ctx.moveTo(x + 4, y + 4);
+                ctx.lineTo(x + size - 4, y + size - 4);
+                ctx.stroke();
+            } else {
+                ctx.beginPath();
+                ctx.moveTo(x + size - 4, y + 4);
+                ctx.lineTo(x + 4, y + size - 4);
+                ctx.stroke();
             }
         }
 
         function draw() {
-            ctx.fillStyle = '#000000';
+            ctx.fillStyle = '#1a1a1a';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Draw grass background
+            // Draw rocky ground
             for (let x = Math.floor(game.camera.x / TILE_SIZE); x < Math.ceil((game.camera.x + canvas.width) / TILE_SIZE); x++) {
                 for (let y = Math.floor(game.camera.y / TILE_SIZE); y < Math.ceil((game.camera.y + canvas.height) / TILE_SIZE); y++) {
                     const screenX = x * TILE_SIZE - game.camera.x;
                     const screenY = y * TILE_SIZE - game.camera.y;
-                    drawGrass(screenX, screenY, TILE_SIZE);
+                    const seed = x * 73856093 ^ y * 19349663;
+                    drawRock(screenX, screenY, TILE_SIZE, seed);
                 }
+            }
+
+            // Draw dust particles
+            for (let particle of game.dust) {
+                particle.draw(ctx);
             }
 
             // Draw footprints
