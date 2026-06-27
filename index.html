@@ -704,7 +704,8 @@
                 { base: '#7f5f2a', light: '#bf9f4a', dark: '#5f3f1a' }   // Orange
             ];
             
-            const color = colors[(seed / 100 | 0) % colors.length];
+            const colorIndex = Math.abs(seed) % 4;
+            const color = colors[colorIndex];
             
             // Draw base background
             ctx.fillStyle = '#0a0a15';
@@ -714,13 +715,13 @@
             ctx.fillStyle = color.dark;
             ctx.fillRect(x, y + size * 0.6, size, size * 0.4);
             
-            // Draw crystal points
-            const crystalCount = 3 + (seed % 3);
+            // Draw crystal points - fewer and more scattered
+            const crystalCount = 2 + (seed % 2);
             for (let i = 0; i < crystalCount; i++) {
-                const crystalX = x + (size / (crystalCount + 1)) * (i + 1);
-                const crystalY = y + size * 0.6;
-                const crystalHeight = size * (0.3 + (seed % 3) * 0.15);
-                const crystalWidth = size * 0.15;
+                const crystalX = x + 4 + ((seed + i * 13) % (size - 8));
+                const crystalY = y + size * 0.5;
+                const crystalHeight = size * (0.2 + (seed % 2) * 0.15);
+                const crystalWidth = size * 0.12;
                 
                 // Outer crystal
                 ctx.fillStyle = color.base;
@@ -757,7 +758,7 @@
             // Add ambient glow
             const ambientGlow = Math.sin(game.gameTime * 0.02 + seed * 0.01) * 0.15 + 0.4;
             ctx.fillStyle = color.light;
-            ctx.globalAlpha = ambientGlow * 0.2;
+            ctx.globalAlpha = ambientGlow * 0.15;
             ctx.fillRect(x, y, size, size);
             ctx.globalAlpha = 1;
         }
