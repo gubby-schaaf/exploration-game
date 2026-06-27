@@ -714,17 +714,19 @@
                     const crystalCount = 3 + Math.floor(seededRandom(seed + 1) * 3);
                     for (let i = 0; i < crystalCount; i++) {
                         const crystalSeed = seed + i * 12345;
-                        const cx = tileX * TILE_SIZE + seededRandom(crystalSeed) * TILE_SIZE;
-                        const cy = tileY * TILE_SIZE + seededRandom(crystalSeed + 1) * TILE_SIZE;
+                        const localX = seededRandom(crystalSeed) * TILE_SIZE;
+                        const localY = seededRandom(crystalSeed + 1) * TILE_SIZE;
+                        const cx = screenX + localX;
+                        const cy = screenY + localY;
                         const crystalColor = colors[Math.floor(seededRandom(crystalSeed + 2) * colors.length)];
                         const crystalHeight = 8 + seededRandom(crystalSeed + 3) * 12;
 
                         ctx.fillStyle = crystalColor;
                         ctx.globalAlpha = 0.6;
                         ctx.beginPath();
-                        ctx.moveTo(cx - screenX + (TILE_SIZE / 2 - cx), cy - screenY + (TILE_SIZE / 2 - cy));
-                        ctx.lineTo(cx - screenX + 4, cy - screenY + crystalHeight);
-                        ctx.lineTo(cx - screenX - 4, cy - screenY + crystalHeight);
+                        ctx.moveTo(cx, cy);
+                        ctx.lineTo(cx + 4, cy + crystalHeight);
+                        ctx.lineTo(cx - 4, cy + crystalHeight);
                         ctx.closePath();
                         ctx.fill();
                         ctx.globalAlpha = 1;
@@ -777,7 +779,6 @@
             game.attacks = game.attacks.filter(a => a.lifetime > 0);
 
             // Track enemies killed
-            const currentEnemyCount = game.enemies.length;
             const newEnemies = game.enemies.filter(e => e.health > 0);
             const killedThisFrame = game.enemies.length - newEnemies.length;
             game.enemiesKilled += killedThisFrame;
@@ -788,6 +789,16 @@
             game.attackIndicators = game.attackIndicators.filter(i => i.lifetime > 0);
 
             document.getElementById('enemiesKilled').textContent = Math.min(game.enemiesKilled, 15);
+
+            // Reload UI
+            if (game.player.isReloading) {
+                document.getElementById('reloadBar').style.display = 'block';
+                const percent = Math.floor((game.player.reloadProgress / game.player.reloadTime) * 100);
+                document.getElementById('reloadPercent').textContent = percent;
+            } else {
+                document.getElementById('reloadBar').style.display = 'none';
+            }
+            document.getElementById('ammoCount').textContent = game.player.currentAmmo;
 
             updateCamera();
         }
