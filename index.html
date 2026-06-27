@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exploration Game</title>
+  <style>
+    body { margin:0; background:#0a0a1a; font-family:Arial,sans-serif; overflow:hidden; }
+    canvas { display:block; margin:0 auto; border:2px solid #fff; background:#1f1a16; }
+    #ui, #ammo, #special {
+      position:absolute; background:rgba(0,0,0,.65); color:#fff; padding:10px; border:1px solid #fff;
+    }
+    #ui { top:12px; left:12px; font-size:14px; line-height:1.4; }
+    #ammo { bottom:14px; left:14px; color:#ff0; border-color:#ff0; font-size:18px; }
+    #special { bottom:14px; right:14px; color:#66d9ff; border-color:#66d9ff; font-size:18px; }
+  </style>
+</head>
+<body>
+  <canvas id="gameCanvas" width="1100" height="700"></canvas>
+
+  <div id="ui">
+    <div>Health: <span id="health">100</span>/100</div>
+    <div>Enemies Killed: <span id="killed">0</span>/15</div>
+    <div>W/A/S/D or Arrow Keys to move | Click melee | Space shoot | X shockwave</div>
+  </div>
+  <div id="ammo">Arrows: <span id="ammoCount">3</span>/3</div>
+  <div id="special">Shockwave: <span id="shockStatus">READY</span></div>
+
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+    const healthEl = document.getElementById("health");
+    const killedEl = document.getElementById("killed");
+    const ammoEl = document.getElementById("ammoCount");
+    const shockEl = document.getElementById("shockStatus");
+
+    const keys = {};
+    const game = { over:false, killed:0, enemies:[], shots:[], particles:[] };
+
+    const player = {
+      x: canvas.width/2, y: canvas.height/2, r: 13, speed: 3.2,
+      hp: 100, dirX: 0, dirY: 1, ammo:3, shootCd:0, reload:0, meleeCd:0, shockCd:0
+    };
+
+    const rand = (a,b)=>Math.random()*(b-a)+a;
+
+    function spawnEnemy() {
+      const side = Math.floor(Math.random()*4);
+      let x,y;
+      if (side===0){x=rand(0,canvas.width);y=-20;}
+      else if(side===1){x=canvas.width+20;y=rand(0,canvas.height);}
+      else if(side===2){x=rand(0,canvas.width);y=canvas.height+20;}
+      else {x=-20;y=rand(0,canvas.height);}
+      game.enemies.push({x,y,r:12,hp:25,speed:rand(.8,1.4)});
+    }
+
+    function shoot(){
+      if(game.over||player.shootCd>0)return;
+      if(player.ammo<=0){ if(player.reload<=0) player.reload=90; return; }
+      let dx=player.dirX, dy=player.dirY; if(!dx&&!dy)dy=1;
+      const m=Math.hypot(dx,dy)||1; dx/=m; dy/=m;
+      game.shots.push({x:player.x,y:player.y,vx:dx*7,vy:dy*7,r:4,dmg:13,life:100});
+      player.ammo--; player.shootCd=10;
+    }
+
+    function melee(){
+      if(game.over||player.meleeCd>0)return;
+      player.meleeCd=18;
+      for(const e of game.enemies){
+        if(Math.hypot(e.x-player.x,e.y-player.y)<58) e.hp-=18;
+      }
+    }
+
+    function shockwave(){
+      if(game.over||player.shockCd>0)return;
+      player.shockCd=360;
+      for(const e of game.enemies){
+        const dx=e.x-player.x, dy=e.y-player.y, d=Math.hypot(dx,dy);
+        if(d>0&&d<170){ const f=(1-d/170)*20; e.x+=(dx/d)*f*3; e.y+=(dy/d)*f*3; e.hp-=8; }
+      }
+    }
+
+    function input(){
+      let vx=0,vy=0;
+      if(keys.w||keys.arrowup)vy-=1;
+      if(keys.s||keys.arrowdown)vy+=1;
+      if(keys.a||keys.arrowleft)vx-=1;
+      if(keys.d||keys.arrowright)vx+=1;
+
+      if(vx||vy){ const m=Math.hypot(vx,vy); vx/=m; vy/=m; player.dirX=vx; player.dirY=vy; }
+      player.x=Math.max(player.r,Math.min(canvas.width-player.r,player.x+vx*player.speed));
+      player.y=Math.max(player.r,Math.min(canvas.height-player.r,player.y+vy*player.speed));
+    }
+
+    function update(){
+      if(game.over)return;
+      if(Math.random()<0.02&&game.enemies.length<24)spawnEnemy();
+      input();
+
+      if(player.shootCd>0)player.shootCd--;
+      if(player.meleeCd>0)player.meleeCd--;
+      if(player.shockCd>0)player.shockCd--;
+      if(player.reload>0){ player.reload--; if(player.reload===0)player.ammo=3; }
+
+      for(const s of game.shots){ s.x+=s.vx; s.y+=s.vy; s.life--; }
+
+      for(const e of game.enemies){
+        const dx=player.x-e.x, dy=player.y-e.y, d=Math.hypot(dx,dy)||1;
+        e.x+=(dx/d)*e.speed; e.y+=(dy/d)*e.speed;
+        if(d<e.r+player.r){ player.hp-=0.12; if(player.hp<=0){ player.hp=0; game.over=true; } }
+      }
+
+      for(const s of game.shots){
+        for(const e of game.enemies){
+          if(Math.hypot(s.x-e.x,s.y-e.y)<s.r+e.r){ e.hp-=s.dmg; s.life=0; break; }
+        }
+      }
+
+      const before=game.enemies.length;
+      game.enemies=game.enemies.filter(e=>e.hp>0);
+      game.killed += before-game.enemies.length;
+      if(game.killed>=15)game.over=true;
+
+      game.shots=game.shots.filter(s=>s.life>0&&s.x>-20&&s.x<canvas.width+20&&s.y>-20&&s.y<canvas.height+20);
+
+      healthEl.textContent=Math.ceil(player.hp);
+      killedEl.textContent=Math.min(game.killed,15);
+      ammoEl.textContent=player.ammo;
+      if(player.shockCd>0){ shockEl.textContent=(player.shockCd/60).toFixed(1)+"s"; shockEl.style.color="#ffcc66"; }
+      else { shockEl.textContent="READY"; shockEl.style.color="#66ff99"; }
+    }
+
+    function draw(){
+      ctx.fillStyle="#2b241f"; ctx.fillRect(0,0,canvas.width,canvas.height);
+
+      ctx.fillStyle="#ff0";
+      for(const s of game.shots){ ctx.beginPath(); ctx.arc(s.x,s.y,s.r,0,Math.PI*2); ctx.fill(); }
+
+      for(const e of game.enemies){
+        ctx.fillStyle="#2cff2c"; ctx.beginPath(); ctx.arc(e.x,e.y,e.r,0,Math.PI*2); ctx.fill();
+        ctx.fillStyle="#f00"; ctx.fillRect(e.x-14,e.y-20,28,4);
+        ctx.fillStyle="#0f0"; ctx.fillRect(e.x-14,e.y-20,28*Math.max(0,e.hp/25),4);
+      }
+
+      ctx.fillStyle="#e6d4a8"; ctx.beginPath(); ctx.arc(player.x,player.y,player.r,0,Math.PI*2); ctx.fill();
+      ctx.fillStyle="#000"; ctx.beginPath(); ctx.arc(player.x-4,player.y-3,1.8,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(player.x+4,player.y-3,1.8,0,Math.PI*2); ctx.fill();
+      ctx.fillRect(player.x-3,player.y+4,6,1.5);
+      ctx.fillStyle="#ff6600"; ctx.fillRect(player.x+player.dirX*10-2,player.y+player.dirY*10-2,4,4);
+
+      if(game.over){
+        ctx.fillStyle="rgba(0,0,0,.6)"; ctx.fillRect(0,0,canvas.width,canvas.height);
+        ctx.fillStyle="#fff"; ctx.textAlign="center"; ctx.font="bold 48px Arial";
+        ctx.fillText(game.killed>=15?"YOU WIN!":"GAME OVER",canvas.width/2,canvas.height/2-10);
+        ctx.font="22px Arial"; ctx.fillText("Press R to restart",canvas.width/2,canvas.height/2+30);
+        ctx.textAlign="left";
+      }
+    }
+
+    function restart(){
+      game.over=false; game.killed=0; game.enemies=[]; game.shots=[]; game.particles=[];
+      player.x=canvas.width/2; player.y=canvas.height/2; player.hp=100;
+      player.ammo=3; player.shootCd=0; player.reload=0; player.meleeCd=0; player.shockCd=0;
+    }
+
+    addEventListener("keydown",e=>{
+      const k=e.key.toLowerCase(); keys[k]=true;
+      if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
+      if(k===" "&&!game.over)shoot();
+      if(k==="x"&&!game.over)shockwave();
+      if(k==="r"&&game.over)restart();
+    });
+    addEventListener("keyup",e=>{ keys[e.key.toLowerCase()]=false; });
+    canvas.addEventListener("click",melee);
+
+    function loop(){ update(); draw(); requestAnimationFrame(loop); }
+    loop();
+  </script>
+</body>
+</html>
