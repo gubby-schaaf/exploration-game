@@ -80,7 +80,7 @@
   </div>
 
   <div id="special">
-    Shockwave (S): <span id="specialStatus">READY</span>
+    Shockwave (X): <span id="specialStatus">READY</span>
   </div>
 
   <div id="bossHealth">
@@ -795,6 +795,23 @@
     window.addEventListener("keydown", (e) => {
       const key = e.key.toLowerCase();
 
+  if (key === "w") keys.w = true;
+  if (key === "a") keys.a = true;
+  if (key === "s") keys.s = true; // S moves down
+  if (key === "d") keys.d = true;
+
+  // Shockwave should be X only
+  if (key === "x" && shockwaveReady) triggerShockwave();
+});
+
+window.addEventListener("keyup", (e) => {
+  const key = e.key.toLowerCase();
+
+  if (key === "w") keys.w = false;
+  if (key === "a") keys.a = false;
+  if (key === "s") keys.s = false;
+  if (key === "d") keys.d = false;
+});
       if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(key)) {
         e.preventDefault();
       }
