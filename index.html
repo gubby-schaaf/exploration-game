@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Exploration Game</title>
+  <title>Exploration Game :3</title>
   <style>
     body {
       margin: 0;
@@ -11,12 +11,14 @@
       font-family: Arial, sans-serif;
       overflow: hidden;
     }
+
     canvas {
       display: block;
       margin: 0 auto;
       border: 2px solid #fff;
       background: #1f1a16;
     }
+
     #ui, #ammo, #special {
       position: absolute;
       background: rgba(0,0,0,0.65);
@@ -25,9 +27,29 @@
       border: 1px solid #fff;
       z-index: 10;
     }
-    #ui { top: 12px; left: 12px; font-size: 14px; line-height: 1.4; }
-    #ammo { bottom: 14px; left: 14px; color: #ff0; border-color: #ff0; font-size: 18px; }
-    #special { bottom: 14px; right: 14px; color: #66d9ff; border-color: #66d9ff; font-size: 18px; }
+
+    #ui {
+      top: 12px;
+      left: 12px;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    #ammo {
+      bottom: 14px;
+      left: 14px;
+      color: #ff0;
+      border-color: #ff0;
+      font-size: 18px;
+    }
+
+    #special {
+      bottom: 14px;
+      right: 14px;
+      color: #66d9ff;
+      border-color: #66d9ff;
+      font-size: 18px;
+    }
   </style>
 </head>
 <body>
@@ -72,7 +94,12 @@
       shootCd: 0,
       reload: 0,
       meleeCd: 0,
-      shockCd: 0
+      shockCd: 0,
+
+      // Regen settings
+      regenDelay: 240,                 // frames (~4s at 60fps)
+      regenRate: 0.08,                 // hp per frame while regenerating
+      lastHitTime: performance.now()   // timestamp of last damage taken
     };
 
     function rand(min, max) {
@@ -226,6 +253,7 @@
 
         if (d < e.r + player.r) {
           player.hp -= 0.12;
+          player.lastHitTime = performance.now(); // reset regen timer on hit
           if (player.hp <= 0) {
             player.hp = 0;
             game.over = true;
@@ -257,6 +285,16 @@
           s.y < canvas.height + 20
       );
 
+      // Regen after avoiding damage for a while
+      const now = performance.now();
+      if (
+        !game.over &&
+        now - player.lastHitTime > player.regenDelay * (1000 / 60) &&
+        player.hp < 100
+      ) {
+        player.hp = Math.min(100, player.hp + player.regenRate);
+      }
+
       healthEl.textContent = Math.ceil(player.hp);
       killedEl.textContent = game.killed;
       ammoEl.textContent = player.ammo;
@@ -270,10 +308,36 @@
       }
     }
 
+    function drawFace(x, y, scale = 1, color = "#000") {
+      ctx.fillStyle = color;
+
+      // eyes
+      ctx.beginPath();
+      ctx.arc(x - 4 * scale, y - 3 * scale, 1.6 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(x + 4 * scale, y - 3 * scale, 1.6 * scale, 0, Math.PI * 2);
+      ctx.fill();
+
+      // :3 mouth
+      ctx.lineWidth = 1.4 * scale;
+      ctx.strokeStyle = color;
+
+      ctx.beginPath();
+      ctx.arc(x - 1.6 * scale, y + 2.3 * scale, 2.1 * scale, 5.15, 0.95);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.arc(x + 1.6 * scale, y + 2.3 * scale, 2.1 * scale, 2.2, 4.48);
+      ctx.stroke();
+    }
+
     function draw() {
       ctx.fillStyle = "#2b241f";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // projectiles
       ctx.fillStyle = "#ff0";
       for (const s of game.shots) {
         ctx.beginPath();
@@ -281,34 +345,33 @@
         ctx.fill();
       }
 
+      // enemies (slimes)
       for (const e of game.enemies) {
         ctx.fillStyle = "#2cff2c";
         ctx.beginPath();
         ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
         ctx.fill();
 
+        // slime face :3
+        drawFace(e.x, e.y, 0.9, "#083808");
+
+        // hp bar
         ctx.fillStyle = "#f00";
         ctx.fillRect(e.x - 14, e.y - 20, 28, 4);
         ctx.fillStyle = "#0f0";
         ctx.fillRect(e.x - 14, e.y - 20, 28 * Math.max(0, e.hp / 25), 4);
       }
 
+      // player body
       ctx.fillStyle = "#e6d4a8";
       ctx.beginPath();
       ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
       ctx.fill();
 
-      ctx.fillStyle = "#000";
-      ctx.beginPath();
-      ctx.arc(player.x - 4, player.y - 3, 1.8, 0, Math.PI * 2);
-      ctx.fill();
+      // player face :3
+      drawFace(player.x, player.y, 1, "#000");
 
-      ctx.beginPath();
-      ctx.arc(player.x + 4, player.y - 3, 1.8, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillRect(player.x - 3, player.y + 4, 6, 1.5);
-
+      // direction marker
       ctx.fillStyle = "#ff6600";
       ctx.fillRect(player.x + player.dirX * 10 - 2, player.y + player.dirY * 10 - 2, 4, 4);
 
@@ -340,6 +403,7 @@
       player.reload = 0;
       player.meleeCd = 0;
       player.shockCd = 0;
+      player.lastHitTime = performance.now();
     }
 
     window.addEventListener("keydown", (e) => {
