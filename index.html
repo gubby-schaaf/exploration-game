@@ -79,7 +79,8 @@
       over: false,
       killed: 0,
       enemies: [],
-      shots: []
+      shots: [],
+      shockwaves: []
     };
 
     const player = {
@@ -163,6 +164,15 @@
       if (game.over || player.shockCd > 0) return;
       player.shockCd = 360;
 
+      // animation pulse
+      game.shockwaves.push({
+        x: player.x,
+        y: player.y,
+        r: 10,
+        maxR: 190,
+        life: 22
+      });
+
       for (const e of game.enemies) {
         const dx = e.x - player.x;
         const dy = e.y - player.y;
@@ -218,6 +228,13 @@
         s.y += s.vy;
         s.life--;
       }
+
+      // shockwave animation update
+      for (const w of game.shockwaves) {
+        w.r += (w.maxR - w.r) * 0.22;
+        w.life--;
+      }
+      game.shockwaves = game.shockwaves.filter(w => w.life > 0);
 
       for (const e of game.enemies) {
         const dx = player.x - e.x;
@@ -311,6 +328,25 @@
       ctx.fillStyle = "#2b241f";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+      // shockwave animation
+      for (const w of game.shockwaves) {
+        const a = w.life / 22;
+
+        // outer ring
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(102, 217, 255, ${0.9 * a})`;
+        ctx.lineWidth = 6;
+        ctx.stroke();
+
+        // inner glow ring
+        ctx.beginPath();
+        ctx.arc(w.x, w.y, w.r * 0.72, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(180, 245, 255, ${0.55 * a})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+
       // shots
       ctx.fillStyle = "#ff0";
       for (const s of game.shots) {
@@ -364,6 +400,7 @@
       game.killed = 0;
       game.enemies = [];
       game.shots = [];
+      game.shockwaves = [];
 
       player.x = canvas.width / 2;
       player.y = canvas.height / 2;
