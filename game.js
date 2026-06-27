@@ -5,6 +5,7 @@ const healthEl = document.getElementById("health");
 const killedEl = document.getElementById("killed");
 const ammoEl = document.getElementById("ammoCount");
 const shockEl = document.getElementById("shockStatus");
+const meteorEl = document.getElementById("meteorStatus");
 const bossUi = document.getElementById("bossUi");
 const bossBar = document.getElementById("bossBar");
 
@@ -18,7 +19,11 @@ const game = {
   shockwaves: [],
   enemyShots: [],
   boss: null,
-  bossSpawned: false
+  bossSpawned: false,
+  meteor: null,
+  meteorDust: [],
+  impactDust: [],
+  screenShake: 0
 };
 
 const player = {
@@ -34,6 +39,7 @@ const player = {
   reload: 0,
   meleeCd: 0,
   shockCd: 0,
+  meteorCd: 0,
   regenDelay: 240,
   regenRate: 0.08,
   lastHitTime: performance.now()
@@ -183,6 +189,50 @@ function shockwave() {
   }
 }
 
+function meteorStrike() {
+  if (game.over || player.meteorCd > 0 || game.meteor) return;
+
+  player.meteorCd = 60 * 120; // 2 minutes at 60fps
+  game.meteor = {
+    x: rand(220, canvas.width - 220),
+    y: -120,
+    vx: rand(-0.45, 0.45),
+    vy: rand(8.5, 10.5),
+    r: rand(36, 50),
+    rot: rand(0, Math.PI * 2),
+    rotSpeed: rand(-0.06, 0.06),
+    hitY: rand(canvas.height * 0.38, canvas.height * 0.68)
+  };
+}
+
+function applyMeteorImpact(mx, my) {
+  // Bring all active slimes down to half max HP (without healing low HP enemies)
+  for (const e of game.enemies) {
+    if (e.hp > 0) {
+      const half = Math.ceil(e.maxHp * 0.5);
+      e.hp = Math.min(e.hp, half);
+    }
+  }
+
+  // Big dust burst
+  for (let i = 0; i < 90; i++) {
+    const a = rand(0, Math.PI * 2);
+    const speed = rand(1.2, 6.2);
+    game.impactDust.push({
+      x: mx + Math.cos(a) * rand(0, 14),
+      y: my + Math.sin(a) * rand(0, 8),
+      vx: Math.cos(a) * speed,
+      vy: Math.sin(a) * speed - rand(0.2, 1.8),
+      life: rand(20, 42),
+      maxLife: 42,
+      size: rand(1.8, 5.2),
+      color: Math.random() < 0.55 ? "#c49a6c" : "#8a6a4f"
+    });
+  }
+
+  game.screenShake = 18;
+}
+
 function handleInput() {
   let vx = 0, vy = 0;
   if (keys["w"] || keys["arrowup"]) vy -= 1;
@@ -235,6 +285,7 @@ function update() {
   if (player.shootCd > 0) player.shootCd--;
   if (player.meleeCd > 0) player.meleeCd--;
   if (player.shockCd > 0) player.shockCd--;
+  if (player.meteorCd > 0) player.meteorCd--;
 
   if (player.reload > 0) {
     player.reload--;
@@ -252,6 +303,47 @@ function update() {
     w.life--;
   }
   game.shockwaves = game.shockwaves.filter(w => w.life > 0);
+
+  // Meteor update + falling dust
+  if (game.meteor) {
+    game.meteor.x += game.meteor.vx;
+    game.meteor.y += game.meteor.vy;
+    game.meteor.rot += game.meteor.rotSpeed;
+
+    for (let i = 0; i < 4; i++) {
+      game.meteorDust.push({
+        x: game.meteor.x + rand(-8, 8),
+        y: game.meteor.y + rand(-8, 8),
+        vx: rand(-0.9, 0.9),
+        vy: rand(0.8, 2.4),
+        life: rand(14, 26),
+        maxLife: 26,
+        size: rand(1.4, 3.4)
+      });
+    }
+
+    if (game.meteor.y >= game.meteor.hitY) {
+      applyMeteorImpact(game.meteor.x, game.meteor.y);
+      game.meteor = null;
+      game.meteorDust.length = 0;
+    }
+  }
+
+  for (const d of game.meteorDust) {
+    d.x += d.vx;
+    d.y += d.vy;
+    d.life--;
+  }
+  game.meteorDust = game.meteorDust.filter(d => d.life > 0);
+
+  for (const p of game.impactDust) {
+    p.x += p.vx;
+    p.y += p.vy;
+    p.vy += 0.07;
+    p.vx *= 0.985;
+    p.life--;
+  }
+  game.impactDust = game.impactDust.filter(p => p.life > 0);
 
   for (const e of game.enemies) {
     const dx = player.x - e.x;
@@ -343,6 +435,8 @@ function update() {
     player.hp = Math.min(100, player.hp + player.regenRate);
   }
 
+  if (game.screenShake > 0) game.screenShake--;
+
   healthEl.textContent = Math.ceil(player.hp);
   killedEl.textContent = game.killed;
   ammoEl.textContent = player.ammo;
@@ -353,6 +447,16 @@ function update() {
   } else {
     shockEl.textContent = "READY";
     shockEl.style.color = "#66ff99";
+  }
+
+  if (meteorEl) {
+    if (player.meteorCd > 0) {
+      meteorEl.textContent = Math.ceil(player.meteorCd / 60) + "s";
+      meteorEl.style.color = "#ffcc66";
+    } else {
+      meteorEl.textContent = "READY";
+      meteorEl.style.color = "#66ff99";
+    }
   }
 
   if (game.boss) {
@@ -389,7 +493,32 @@ function drawFace(x, y, scale = 1, color = "#000") {
   ctx.restore();
 }
 
+function drawMeteorRock(m) {
+  ctx.save();
+  ctx.translate(m.x, m.y);
+  ctx.rotate(m.rot);
+
+  ctx.fillStyle = "#8b6f54";
+  ctx.beginPath();
+  ctx.arc(0, 0, m.r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.fillStyle = "#6f5642";
+  ctx.beginPath();
+  ctx.arc(-m.r * 0.28, -m.r * 0.15, m.r * 0.24, 0, Math.PI * 2);
+  ctx.arc(m.r * 0.24, m.r * 0.2, m.r * 0.2, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.restore();
+}
+
 function draw() {
+  const shakeX = game.screenShake > 0 ? rand(-game.screenShake * 0.5, game.screenShake * 0.5) : 0;
+  const shakeY = game.screenShake > 0 ? rand(-game.screenShake * 0.5, game.screenShake * 0.5) : 0;
+
+  ctx.save();
+  ctx.translate(shakeX, shakeY);
+
   ctx.fillStyle = "#2b241f";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -406,6 +535,28 @@ function draw() {
     ctx.strokeStyle = `rgba(180, 245, 255, ${0.55 * a})`;
     ctx.lineWidth = 3;
     ctx.stroke();
+  }
+
+  for (const d of game.meteorDust) {
+    const a = d.life / d.maxLife;
+    ctx.fillStyle = `rgba(190, 160, 120, ${0.65 * a})`;
+    ctx.beginPath();
+    ctx.arc(d.x, d.y, d.size, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  if (game.meteor) {
+    drawMeteorRock(game.meteor);
+  }
+
+  for (const p of game.impactDust) {
+    const a = p.life / p.maxLife;
+    ctx.fillStyle = p.color;
+    ctx.globalAlpha = Math.max(0, a);
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
   }
 
   ctx.fillStyle = "#ff0";
@@ -465,6 +616,8 @@ function draw() {
     ctx.fillText("Press R to restart", canvas.width / 2, canvas.height / 2 + 30);
     ctx.textAlign = "left";
   }
+
+  ctx.restore();
 }
 
 function restart() {
@@ -476,6 +629,10 @@ function restart() {
   game.enemyShots = [];
   game.boss = null;
   game.bossSpawned = false;
+  game.meteor = null;
+  game.meteorDust = [];
+  game.impactDust = [];
+  game.screenShake = 0;
   bossUi.style.display = "none";
 
   player.x = canvas.width / 2;
@@ -486,6 +643,7 @@ function restart() {
   player.reload = 0;
   player.meleeCd = 0;
   player.shockCd = 0;
+  player.meteorCd = 0;
   player.lastHitTime = performance.now();
 }
 
@@ -497,6 +655,7 @@ window.addEventListener("keydown", (e) => {
 
   if (key === " " && !game.over) shoot();
   if (key === "x" && !game.over) shockwave();
+  if (key === "m" && !game.over) meteorStrike();
   if (key === "r" && game.over) restart();
 });
 
