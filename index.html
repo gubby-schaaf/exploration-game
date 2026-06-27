@@ -711,7 +711,7 @@
     }
 
     function drawTerrain() {
-      ctx.fillStyle = "#050510";
+      ctx.fillStyle = "#2a241f";
       ctx.fillRect(0, 0, canvas.width, canvas.height);
 
       const startX = Math.floor(game.camera.x / TILE_SIZE);
@@ -719,47 +719,57 @@
       const endX = Math.ceil((game.camera.x + canvas.width) / TILE_SIZE);
       const endY = Math.ceil((game.camera.y + canvas.height) / TILE_SIZE);
 
-      const colors = ["#ff00ff", "#00ffff", "#ff00aa", "#00ffaa"];
+      const rockColors = ["#5a4f45", "#4a4138", "#6a5d50", "#3d362f", "#74685b"];
+      const pebbleColors = ["#8b7e70", "#7a6d60", "#a09284", "#665b50"];
+
       const seededRandom = (seed) => {
-        const x = Math.sin(seed) * 10000;
+        const x = Math.sin(seed * 12.9898) * 43758.5453;
         return x - Math.floor(x);
       };
 
       for (let tileX = startX; tileX < endX; tileX++) {
         for (let tileY = startY; tileY < endY; tileY++) {
           const seed = (tileX * 73856093) ^ (tileY * 19349663);
-          const colorIndex = Math.floor(seededRandom(seed) * colors.length);
-
           const screenX = tileX * TILE_SIZE - game.camera.x;
           const screenY = tileY * TILE_SIZE - game.camera.y;
 
-          ctx.fillStyle = colors[colorIndex];
+          const baseColor = rockColors[Math.floor(seededRandom(seed) * rockColors.length)];
+          ctx.fillStyle = baseColor;
           ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
 
-          ctx.strokeStyle = "rgba(0,0,0,0.3)";
-          ctx.lineWidth = 0.5;
-          ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+          const crackCount = 1 + Math.floor(seededRandom(seed + 1) * 3);
+          for (let c = 0; c < crackCount; c++) {
+            const crackSeed = seed + c * 97;
+            const x1 = screenX + seededRandom(crackSeed) * TILE_SIZE;
+            const y1 = screenY + seededRandom(crackSeed + 1) * TILE_SIZE;
+            const x2 = x1 + (seededRandom(crackSeed + 2) - 0.5) * 14;
+            const y2 = y1 + (seededRandom(crackSeed + 3) - 0.5) * 14;
 
-          const crystalCount = 3 + Math.floor(seededRandom(seed + 1) * 3);
-          for (let i = 0; i < crystalCount; i++) {
-            const crystalSeed = seed + i * 12345;
-            const localX = seededRandom(crystalSeed) * TILE_SIZE;
-            const localY = seededRandom(crystalSeed + 1) * TILE_SIZE;
-            const cx = screenX + localX;
-            const cy = screenY + localY;
-            const crystalColor = colors[Math.floor(seededRandom(crystalSeed + 2) * colors.length)];
-            const crystalHeight = 8 + seededRandom(crystalSeed + 3) * 12;
-
-            ctx.fillStyle = crystalColor;
-            ctx.globalAlpha = 0.6;
+            ctx.strokeStyle = "rgba(30, 25, 20, 0.45)";
+            ctx.lineWidth = 1;
             ctx.beginPath();
-            ctx.moveTo(cx, cy);
-            ctx.lineTo(cx + 4, cy + crystalHeight);
-            ctx.lineTo(cx - 4, cy + crystalHeight);
-            ctx.closePath();
-            ctx.fill();
-            ctx.globalAlpha = 1;
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
           }
+
+          const pebbleCount = 3 + Math.floor(seededRandom(seed + 4) * 5);
+          for (let p = 0; p < pebbleCount; p++) {
+            const pebbleSeed = seed + p * 137;
+            const px = screenX + 2 + seededRandom(pebbleSeed) * (TILE_SIZE - 4);
+            const py = screenY + 2 + seededRandom(pebbleSeed + 1) * (TILE_SIZE - 4);
+            const radius = 0.8 + seededRandom(pebbleSeed + 2) * 1.8;
+            const color = pebbleColors[Math.floor(seededRandom(pebbleSeed + 3) * pebbleColors.length)];
+
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.arc(px, py, radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.fillStyle = "rgba(255, 255, 255, 0.04)";
+          ctx.fillRect(screenX, screenY, TILE_SIZE, 1);
+          ctx.fillRect(screenX, screenY, 1, TILE_SIZE);
         }
       }
     }
