@@ -171,6 +171,31 @@
             }
         }
 
+        // Enemy Attack Indicator class
+        class EnemyAttackIndicator {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.lifetime = 20;
+                this.maxLifetime = 20;
+                this.radius = 5;
+            }
+
+            update() {
+                this.lifetime--;
+                this.radius += 1;
+            }
+
+            draw(ctx) {
+                const alpha = this.lifetime / this.maxLifetime;
+                ctx.strokeStyle = `rgba(255, 100, 100, ${alpha})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.radius, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+        }
+
         // Player class
         class Player {
             constructor(x, y) {
@@ -198,6 +223,11 @@
                 this.isReloading = false;
                 this.reloadTime = 120;
                 this.reloadProgress = 0;
+
+                // Health regeneration
+                this.lastDamageTime = 0;
+                this.regenDelay = 300; // 5 seconds at 60fps
+                this.regenRate = 0.05; // Regenerate 5% of max health per second
             }
 
             update() {
@@ -234,6 +264,12 @@
                         this.isReloading = false;
                         this.reloadProgress = 0;
                     }
+                }
+
+                // Health regeneration
+                if (game.gameTime - this.lastDamageTime > this.regenDelay && this.health < this.maxHealth) {
+                    this.health = Math.min(this.maxHealth, this.health + this.regenRate);
+                    document.getElementById('health').textContent = Math.ceil(this.health);
                 }
             }
 
@@ -353,6 +389,8 @@
             takeDamage(amount) {
                 this.health -= amount;
                 if (this.health < 0) this.health = 0;
+                this.lastDamageTime = game.gameTime;
+                document.getElementById('health').textContent = Math.ceil(this.health);
             }
         }
 
@@ -386,6 +424,11 @@
 
                 if (this.attackCooldown > 0) this.attackCooldown--;
                 if (dist < 40 && this.attackCooldown === 0) {
+                    // Show attack indicator
+                    game.attackIndicators.push(new EnemyAttackIndicator(
+                        game.player.x,
+                        game.player.y
+                    ));
                     game.player.takeDamage(this.damage);
                     this.attackCooldown = 60;
                 }
@@ -548,6 +591,11 @@
                     }
                 } else {
                     if (this.collidesWith(game.player)) {
+                        // Show attack indicator
+                        game.attackIndicators.push(new EnemyAttackIndicator(
+                            game.player.x,
+                            game.player.y
+                        ));
                         game.player.takeDamage(this.damage);
                         this.lifetime = 0;
                     }
@@ -596,221 +644,178 @@
                 if (keys[key]) {
                     game.player.vx += dirs[key][0] * game.player.speed;
                     game.player.vy += dirs[key][1] * game.player.speed;
-                    if (dirs[key][1] === -1) game.player.direction = 1;
-                    else if (dirs[key][1] === 1) game.player.direction = 0;
-                    else if (dirs[key][0] === -1) game.player.direction = 2;
-                    else if (dirs[key][0] === 1) game.player.direction = 3;
+                    game.player.direction = key === 'w' || key === 'arrowup' ? 1 : 
+                                           key === 's' || key === 'arrowdown' ? 0 : 
+                                           key === 'a' || key === 'arrowleft' ? 2 : 3;
                 }
             }
         }
 
+        function spawnEnemies() {
+            if (Math.random() < game.enemySpawnRate && game.enemies.length < 20) {
+                const side = Math.floor(Math.random() * 4);
+                let x, y;
+                if (side === 0) { x = Math.random() * WORLD_WIDTH; y = -20; }
+                else if (side === 1) { x = WORLD_WIDTH + 20; y = Math.random() * WORLD_HEIGHT; }
+                else if (side === 2) { x = Math.random() * WORLD_WIDTH; y = WORLD_HEIGHT + 20; }
+                else { x = -20; y = Math.random() * WORLD_HEIGHT; }
+                
+                const type = Math.random() < 0.3 ? 'strong' : 'normal';
+                game.enemies.push(new Enemy(x, y, type));
+            }
+        }
+
         function spawnBoss() {
-            game.boss = new Boss(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+            if (!game.boss || !game.boss.active) {
+                game.boss = new Boss(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+                document.getElementById('bossHealth').style.display = 'block';
+            }
+        }
+
+        function updateCamera() {
+            game.camera.x = game.player.x - canvas.width / 2;
+            game.camera.y = game.player.y - canvas.height / 2;
+            game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
+            game.camera.y = Math.max(0, Math.min(game.camera.y, WORLD_HEIGHT - canvas.height));
+        }
+
+        function drawTerrain() {
+            ctx.fillStyle = '#050510';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            const startX = Math.floor(game.camera.x / TILE_SIZE);
+            const startY = Math.floor(game.camera.y / TILE_SIZE);
+            const endX = Math.ceil((game.camera.x + canvas.width) / TILE_SIZE);
+            const endY = Math.ceil((game.camera.y + canvas.height) / TILE_SIZE);
+
+            const colors = ['#ff00ff', '#00ffff', '#ff00aa', '#00ffaa'];
+            const seededRandom = (seed) => {
+                const x = Math.sin(seed) * 10000;
+                return x - Math.floor(x);
+            };
+
+            for (let tileX = startX; tileX < endX; tileX++) {
+                for (let tileY = startY; tileY < endY; tileY++) {
+                    const seed = tileX * 73856093 ^ tileY * 19349663;
+                    const rand = seededRandom(seed);
+                    const colorIndex = Math.floor(rand * colors.length);
+                    ctx.fillStyle = colors[colorIndex];
+
+                    const screenX = tileX * TILE_SIZE - game.camera.x;
+                    const screenY = tileY * TILE_SIZE - game.camera.y;
+                    ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
+                    ctx.lineWidth = 0.5;
+                    ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+                    // Draw crystals
+                    const crystalCount = 3 + Math.floor(seededRandom(seed + 1) * 3);
+                    for (let i = 0; i < crystalCount; i++) {
+                        const crystalSeed = seed + i * 12345;
+                        const cx = tileX * TILE_SIZE + seededRandom(crystalSeed) * TILE_SIZE;
+                        const cy = tileY * TILE_SIZE + seededRandom(crystalSeed + 1) * TILE_SIZE;
+                        const crystalColor = colors[Math.floor(seededRandom(crystalSeed + 2) * colors.length)];
+                        const crystalHeight = 8 + seededRandom(crystalSeed + 3) * 12;
+
+                        ctx.fillStyle = crystalColor;
+                        ctx.globalAlpha = 0.6;
+                        ctx.beginPath();
+                        ctx.moveTo(cx - screenX + (TILE_SIZE / 2 - cx), cy - screenY + (TILE_SIZE / 2 - cy));
+                        ctx.lineTo(cx - screenX + 4, cy - screenY + crystalHeight);
+                        ctx.lineTo(cx - screenX - 4, cy - screenY + crystalHeight);
+                        ctx.closePath();
+                        ctx.fill();
+                        ctx.globalAlpha = 1;
+                    }
+                }
+            }
         }
 
         function update() {
             game.gameTime++;
             handleInput();
-
-            game.player.update();
-
-            if (game.enemies.length < 5 + game.wave * 2 && Math.random() < game.enemySpawnRate) {
-                const spawnX = Math.random() * WORLD_WIDTH;
-                const spawnY = Math.random() * WORLD_HEIGHT;
-                const type = Math.random() < 0.2 ? 'strong' : 'normal';
-                game.enemies.push(new Enemy(spawnX, spawnY, type));
-            }
-
-            if (game.wave === 5 && !game.boss) {
+            spawnEnemies();
+            
+            if (game.enemies.length >= 15 && !game.boss) {
                 spawnBoss();
             }
 
-            for (let i = game.enemies.length - 1; i >= 0; i--) {
-                game.enemies[i].update();
-                if (game.enemies[i].health <= 0) {
-                    game.enemies.splice(i, 1);
-                    game.wave += 0.1;
-                    game.enemySpawnRate += 0.001;
-                }
-            }
-
-            if (game.boss) {
-                game.boss.update();
-            }
-
-            for (let i = game.projectiles.length - 1; i >= 0; i--) {
-                game.projectiles[i].update();
-                if (game.projectiles[i].lifetime <= 0) {
-                    game.projectiles.splice(i, 1);
-                }
-            }
-
-            for (let i = game.attacks.length - 1; i >= 0; i--) {
-                game.attacks[i].update();
-                if (game.attacks[i].lifetime <= 0) {
-                    game.attacks.splice(i, 1);
-                }
-            }
-
-            for (let i = game.footprints.length - 1; i >= 0; i--) {
-                game.footprints[i].update();
-                if (game.footprints[i].lifetime <= 0) {
-                    game.footprints.splice(i, 1);
-                }
-            }
-
-            for (let i = game.dust.length - 1; i >= 0; i--) {
-                game.dust[i].update();
-                if (game.dust[i].lifetime <= 0) {
-                    game.dust.splice(i, 1);
-                }
-            }
-
-            game.camera.x = game.player.x - canvas.width / 2;
-            game.camera.y = game.player.y - canvas.height / 2;
-            game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
-            game.camera.y = Math.max(0, Math.min(game.camera.y, WORLD_HEIGHT - canvas.height));
-
-            document.getElementById('health').textContent = Math.max(0, Math.floor(game.player.health));
-            document.getElementById('enemies').textContent = game.enemies.length;
-
-            if (game.player.isReloading) {
-                document.getElementById('reloadBar').style.display = 'block';
-                const percent = Math.floor((game.player.reloadProgress / game.player.reloadTime) * 100);
-                document.getElementById('reloadPercent').textContent = percent;
-            } else {
-                document.getElementById('reloadBar').style.display = 'none';
+            game.player.update();
+            
+            for (let enemy of game.enemies) {
+                enemy.update();
             }
 
             if (game.boss && game.boss.active) {
-                document.getElementById('bossHealth').style.display = 'block';
-                document.getElementById('bossHealthBar').textContent = Math.max(0, Math.floor(game.boss.health));
-            } else {
-                document.getElementById('bossHealth').style.display = 'none';
+                game.boss.update();
+                document.getElementById('bossHealthBar').textContent = Math.ceil(game.boss.health);
             }
 
-            if (game.player.health <= 0) {
-                alert(`Game Over! Wave: ${Math.floor(game.wave)}`);
-                location.reload();
+            for (let projectile of game.projectiles) {
+                projectile.update();
             }
-        }
 
-        function drawCrystal(x, y, size, seed) {
-            // Determine crystal color based on seed
-            const colors = [
-                { base: '#2a5f7f', light: '#4a9fbf', dark: '#1a3f5f' },  // Blue
-                { base: '#5f2a7f', light: '#9f4abf', dark: '#3f1a5f' },  // Purple
-                { base: '#2a7f5f', light: '#4abf9f', dark: '#1a5f3f' },  // Cyan
-                { base: '#7f5f2a', light: '#bf9f4a', dark: '#5f3f1a' }   // Orange
-            ];
-            
-            const colorIndex = Math.abs(seed) % 4;
-            const color = colors[colorIndex];
-            
-            // Draw base background
-            ctx.fillStyle = '#0a0a15';
-            ctx.fillRect(x, y, size, size);
-            
-            // Draw ground layer
-            ctx.fillStyle = color.dark;
-            ctx.fillRect(x, y + size * 0.6, size, size * 0.4);
-            
-            // Draw crystal points - fewer and more scattered
-            const crystalCount = 2 + (seed % 2);
-            for (let i = 0; i < crystalCount; i++) {
-                const crystalX = x + 4 + ((seed + i * 13) % (size - 8));
-                const crystalY = y + size * 0.5;
-                const crystalHeight = size * (0.2 + (seed % 2) * 0.15);
-                const crystalWidth = size * 0.12;
-                
-                // Outer crystal
-                ctx.fillStyle = color.base;
-                ctx.beginPath();
-                ctx.moveTo(crystalX, crystalY);
-                ctx.lineTo(crystalX + crystalWidth, crystalY - crystalHeight);
-                ctx.lineTo(crystalX + crystalWidth * 2, crystalY);
-                ctx.fill();
-                
-                // Highlight (glow)
-                const glowPhase = (game.gameTime * 0.03 + seed * 0.01) % (Math.PI * 2);
-                const glowAlpha = Math.abs(Math.sin(glowPhase)) * 0.5 + 0.2;
-                
-                ctx.fillStyle = color.light;
-                ctx.globalAlpha = glowAlpha;
-                ctx.beginPath();
-                ctx.moveTo(crystalX, crystalY - crystalHeight * 0.1);
-                ctx.lineTo(crystalX + crystalWidth * 0.5, crystalY - crystalHeight);
-                ctx.lineTo(crystalX + crystalWidth, crystalY - crystalHeight * 0.1);
-                ctx.fill();
-                ctx.globalAlpha = 1;
-                
-                // Crystal edge highlight
-                ctx.strokeStyle = color.light;
-                ctx.lineWidth = 1;
-                ctx.globalAlpha = 0.6;
-                ctx.beginPath();
-                ctx.moveTo(crystalX, crystalY);
-                ctx.lineTo(crystalX + crystalWidth, crystalY - crystalHeight);
-                ctx.stroke();
-                ctx.globalAlpha = 1;
+            for (let attack of game.attacks) {
+                attack.update();
             }
-            
-            // Add ambient glow
-            const ambientGlow = Math.sin(game.gameTime * 0.02 + seed * 0.01) * 0.15 + 0.4;
-            ctx.fillStyle = color.light;
-            ctx.globalAlpha = ambientGlow * 0.15;
-            ctx.fillRect(x, y, size, size);
-            ctx.globalAlpha = 1;
+
+            for (let footprint of game.footprints) {
+                footprint.update();
+            }
+
+            for (let dust of game.dust) {
+                dust.update();
+            }
+
+            for (let indicator of game.attackIndicators) {
+                indicator.update();
+            }
+
+            game.projectiles = game.projectiles.filter(p => p.lifetime > 0);
+            game.attacks = game.attacks.filter(a => a.lifetime > 0);
+            game.enemies = game.enemies.filter(e => e.health > 0);
+            game.footprints = game.footprints.filter(f => f.lifetime > 0);
+            game.dust = game.dust.filter(d => d.lifetime > 0);
+            game.attackIndicators = game.attackIndicators.filter(i => i.lifetime > 0);
+
+            document.getElementById('enemies').textContent = game.enemies.length;
+
+            updateCamera();
         }
 
         function draw() {
-            ctx.fillStyle = '#0a0a1a';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            drawTerrain();
 
-            // Draw crystalline terrain
-            for (let x = Math.floor(game.camera.x / TILE_SIZE); x < Math.ceil((game.camera.x + canvas.width) / TILE_SIZE); x++) {
-                for (let y = Math.floor(game.camera.y / TILE_SIZE); y < Math.ceil((game.camera.y + canvas.height) / TILE_SIZE); y++) {
-                    const screenX = x * TILE_SIZE - game.camera.x;
-                    const screenY = y * TILE_SIZE - game.camera.y;
-                    const seed = x * 73856093 ^ y * 19349663;
-                    drawCrystal(screenX, screenY, TILE_SIZE, seed);
-                }
-            }
-
-            // Draw dust particles
-            for (let particle of game.dust) {
-                particle.draw(ctx);
-            }
-
-            // Draw footprints
             for (let footprint of game.footprints) {
                 footprint.draw(ctx);
             }
 
-            // Draw game objects
-            for (let enemy of game.enemies) {
-                enemy.draw(ctx);
-            }
-
-            if (game.boss) {
-                game.boss.draw(ctx);
+            for (let dust of game.dust) {
+                dust.draw(ctx);
             }
 
             for (let projectile of game.projectiles) {
                 projectile.draw(ctx);
             }
 
+            for (let enemy of game.enemies) {
+                enemy.draw(ctx);
+            }
+
+            if (game.boss && game.boss.active) {
+                game.boss.draw(ctx);
+            }
+
             for (let attack of game.attacks) {
                 attack.draw(ctx);
             }
 
-            game.player.draw(ctx);
-
-            if (game.boss && !game.boss.active) {
-                ctx.fillStyle = '#ffff00';
-                ctx.font = '24px Arial';
-                ctx.fillText('Boss Defeated!', canvas.width / 2 - 100, canvas.height / 2);
+            for (let indicator of game.attackIndicators) {
+                indicator.draw(ctx);
             }
+
+            game.player.draw(ctx);
         }
 
         function gameLoop() {
@@ -819,7 +824,9 @@
             requestAnimationFrame(gameLoop);
         }
 
+        // Initialize game
         game.player = new Player(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+        game.attackIndicators = [];
         gameLoop();
     </script>
 </body>
