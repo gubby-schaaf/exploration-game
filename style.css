@@ -1,0 +1,69 @@
+body {
+  margin: 0;
+  background: #0a0a1a;
+  font-family: Arial, sans-serif;
+  overflow: hidden;
+}
+
+canvas {
+  display: block;
+  margin: 0 auto;
+  border: 2px solid #fff;
+  background: #1f1a16;
+}
+
+#ui, #ammo, #special, #bossUi {
+  position: absolute;
+  background: rgba(0,0,0,0.65);
+  color: #fff;
+  padding: 10px;
+  border: 1px solid #fff;
+  z-index: 10;
+}
+
+#ui {
+  top: 12px;
+  left: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+#ammo {
+  bottom: 14px;
+  left: 14px;
+  color: #ff0;
+  border-color: #ff0;
+  font-size: 18px;
+}
+
+#special {
+  bottom: 14px;
+  right: 14px;
+  color: #66d9ff;
+  border-color: #66d9ff;
+  font-size: 18px;
+}
+
+#bossUi {
+  top: 12px;
+  right: 12px;
+  color: #d9a7ff;
+  border-color: #d9a7ff;
+  font-size: 14px;
+  min-width: 180px;
+  display: none;
+}
+
+.barWrap {
+  width: 170px;
+  height: 10px;
+  background: #3a2a46;
+  border: 1px solid #c084ff;
+  margin-top: 6px;
+}
+
+.barFill {
+  height: 100%;
+  width: 100%;
+  background: #c084ff;
+}
