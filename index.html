@@ -1,852 +1,805 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Exploration Game</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background-color: #0a0a1a;
-            font-family: Arial, sans-serif;
-        }
-        canvas {
-            border: 2px solid #fff;
-            image-rendering: pixelated;
-            image-rendering: crisp-edges;
-        }
-        #ui {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            color: #fff;
-            font-size: 14px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border: 1px solid #fff;
-        }
-        #ammo {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            color: #ffff00;
-            font-size: 18px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border: 2px solid #ffff00;
-        }
-        #bossHealth {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            color: #ff0000;
-            font-size: 16px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border: 1px solid #ff0000;
-            display: none;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exploration Game</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #0a0a1a;
+      font-family: Arial, sans-serif;
+    }
+    canvas {
+      border: 2px solid #fff;
+      image-rendering: pixelated;
+      image-rendering: crisp-edges;
+    }
+    #ui {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #fff;
+      font-size: 14px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border: 1px solid #fff;
+    }
+    #ammo {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      color: #ffff00;
+      font-size: 18px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border: 2px solid #ffff00;
+    }
+    #bossHealth {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      color: #ff0000;
+      font-size: 16px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border: 1px solid #ff0000;
+      display: none;
+    }
+  </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="ui">
-        <div>Health: <span id="health">100</span>/100</div>
-        <div>Enemies Killed: <span id="enemiesKilled">0</span>/15</div>
-        <div>WASD or Arrow Keys to move | Click to melee | Space to shoot</div>
+  <canvas id="gameCanvas" width="800" height="600"></canvas>
+
+  <div id="ui">
+    <div>Health: <span id="health">100</span>/100</div>
+    <div>Enemies Killed: <span id="enemiesKilled">0</span>/15</div>
+    <div>WASD or Arrow Keys to move | Click to melee | Space to shoot</div>
+  </div>
+
+  <div id="ammo">
+    Arrows: <span id="ammoCount">3</span>/3
+    <div id="reloadBar" style="display:none; margin-top:5px;">
+      Reloading: <span id="reloadPercent">0</span>%
     </div>
-    <div id="ammo">
-        Arrows: <span id="ammoCount">3</span>/3
-        <div id="reloadBar" style="display: none; margin-top: 5px;">
-            Reloading: <span id="reloadPercent">0</span>%
-        </div>
-    </div>
-    <div id="bossHealth">
-        <div>Boss Health: <span id="bossHealthBar">0</span>/1000</div>
-    </div>
+  </div>
 
-    <script>
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+  <div id="bossHealth">
+    <div>Boss Health: <span id="bossHealthBar">0</span>/1000</div>
+  </div>
 
-        // Game constants
-        const TILE_SIZE = 32;
-        const WORLD_WIDTH = 2560;
-        const WORLD_HEIGHT = 1920;
+  <script>
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
 
-        // Game state
-        const game = {
-            player: null,
-            enemies: [],
-            projectiles: [],
-            attacks: [],
-            footprints: [],
-            dust: [],
-            boss: null,
-            camera: { x: 0, y: 0 },
-            wave: 1,
-            enemySpawnRate: 0.02,
-            gameTime: 0,
-            enemiesKilled: 0
-        };
+    const TILE_SIZE = 32;
+    const WORLD_WIDTH = 2560;
+    const WORLD_HEIGHT = 1920;
 
-        // Dust particle class
-        class DustParticle {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.vx = (Math.random() - 0.5) * 2;
-                this.vy = Math.random() * -1;
-                this.lifetime = 60;
-                this.maxLifetime = 60;
-                this.size = 2 + Math.random() * 3;
-            }
+    const game = {
+      player: null,
+      enemies: [],
+      projectiles: [],
+      attacks: [],
+      attackIndicators: [],
+      footprints: [],
+      dust: [],
+      boss: null,
+      camera: { x: 0, y: 0 },
+      enemySpawnRate: 0.02,
+      gameTime: 0,
+      enemiesKilled: 0,
+      isGameOver: false
+    };
 
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.lifetime--;
-            }
+    class DustParticle {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.vx = (Math.random() - 0.5) * 2;
+        this.vy = Math.random() * -1;
+        this.lifetime = 60;
+        this.maxLifetime = 60;
+        this.size = 2 + Math.random() * 3;
+      }
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+        this.lifetime--;
+      }
+      draw() {
+        const alpha = this.lifetime / this.maxLifetime;
+        ctx.fillStyle = `rgba(100, 200, 255, ${alpha * 0.6})`;
+        ctx.beginPath();
+        ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.size, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
-            draw(ctx) {
-                const alpha = this.lifetime / this.maxLifetime;
-                ctx.fillStyle = `rgba(100, 200, 255, ${alpha * 0.6})`;
-                ctx.beginPath();
-                ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.size, 0, Math.PI * 2);
-                ctx.fill();
-            }
+    class Footprint {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.lifetime = 120;
+        this.maxLifetime = 120;
+      }
+      update() {
+        this.lifetime--;
+      }
+      draw() {
+        const alpha = this.lifetime / this.maxLifetime;
+        ctx.fillStyle = `rgba(50, 100, 150, ${alpha * 0.5})`;
+        ctx.beginPath();
+        ctx.ellipse(this.x - game.camera.x, this.y - game.camera.y, 8, 6, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    class AttackEffect {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.lifetime = 8;
+        this.maxLifetime = 8;
+      }
+      update() {
+        this.lifetime--;
+      }
+      draw() {
+        const progress = 1 - this.lifetime / this.maxLifetime;
+        const size = 30 + progress * 20;
+        const alpha = 1 - progress;
+        ctx.fillStyle = `rgba(255,200,0,${alpha * 0.8})`;
+        ctx.fillRect(this.x - game.camera.x - size / 2, this.y - game.camera.y - size / 2, size, size);
+        ctx.strokeStyle = `rgba(255,255,100,${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.strokeRect(this.x - game.camera.x - size / 2, this.y - game.camera.y - size / 2, size, size);
+      }
+    }
+
+    class EnemyAttackIndicator {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.lifetime = 20;
+        this.maxLifetime = 20;
+        this.radius = 5;
+      }
+      update() {
+        this.lifetime--;
+        this.radius += 1;
+      }
+      draw() {
+        const alpha = this.lifetime / this.maxLifetime;
+        ctx.strokeStyle = `rgba(255,100,100,${alpha})`;
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.radius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    class Player {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 20;
+        this.height = 20;
+        this.vx = 0;
+        this.vy = 0;
+        this.speed = 3;
+        this.health = 100;
+        this.maxHealth = 100;
+        this.attackCooldown = 0;
+        this.attackRange = 50;
+        this.attackDamage = 15;
+        this.projectileCooldown = 0;
+        this.direction = 0;
+        this.attackFlash = 0;
+        this.bounceOffset = 0;
+        this.lastFootprintTime = 0;
+
+        this.maxAmmo = 3;
+        this.currentAmmo = 3;
+        this.isReloading = false;
+        this.reloadTime = 120;
+        this.reloadProgress = 0;
+
+        this.lastDamageTime = 0;
+        this.regenDelay = 300;
+        this.regenRate = 0.05;
+      }
+
+      update() {
+        this.x += this.vx;
+        this.y += this.vy;
+
+        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
+        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
+
+        this.bounceOffset = Math.sin(game.gameTime * 0.1) * 2;
+
+        if ((this.vx !== 0 || this.vy !== 0) && game.gameTime - this.lastFootprintTime > 8) {
+          game.footprints.push(new Footprint(this.x + this.width / 2, this.y + this.height / 2));
+          for (let i = 0; i < 2; i++) {
+            game.dust.push(new DustParticle(this.x + this.width / 2, this.y + this.height / 2));
+          }
+          this.lastFootprintTime = game.gameTime;
         }
 
-        // Footprint class
-        class Footprint {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.lifetime = 120;
-                this.maxLifetime = 120;
-            }
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        if (this.projectileCooldown > 0) this.projectileCooldown--;
+        if (this.attackFlash > 0) this.attackFlash--;
 
-            update() {
-                this.lifetime--;
-            }
-
-            draw(ctx) {
-                const alpha = this.lifetime / this.maxLifetime;
-                ctx.fillStyle = `rgba(50, 100, 150, ${alpha * 0.5})`;
-                ctx.beginPath();
-                ctx.ellipse(this.x - game.camera.x, this.y - game.camera.y, 8, 6, 0, 0, Math.PI * 2);
-                ctx.fill();
-            }
+        if (this.isReloading) {
+          this.reloadProgress++;
+          if (this.reloadProgress >= this.reloadTime) {
+            this.currentAmmo = this.maxAmmo;
+            this.isReloading = false;
+            this.reloadProgress = 0;
+          }
         }
 
-        // Attack Effect class
-        class AttackEffect {
-            constructor(x, y, direction) {
-                this.x = x;
-                this.y = y;
-                this.direction = direction;
-                this.lifetime = 8;
-                this.maxLifetime = 8;
-            }
+        if (!game.isGameOver && game.gameTime - this.lastDamageTime > this.regenDelay && this.health < this.maxHealth) {
+          this.health = Math.min(this.maxHealth, this.health + this.regenRate);
+          document.getElementById("health").textContent = Math.ceil(this.health);
+        }
+      }
 
-            update() {
-                this.lifetime--;
-            }
+      draw() {
+        const drawX = this.x - game.camera.x;
+        const drawY = this.y - game.camera.y + this.bounceOffset;
 
-            draw(ctx) {
-                const progress = 1 - (this.lifetime / this.maxLifetime);
-                const size = 30 + progress * 20;
-                const alpha = 1 - progress;
-                
-                ctx.fillStyle = `rgba(255, 200, 0, ${alpha * 0.8})`;
-                ctx.fillRect(this.x - game.camera.x - size/2, this.y - game.camera.y - size/2, size, size);
-                
-                ctx.strokeStyle = `rgba(255, 255, 100, ${alpha})`;
-                ctx.lineWidth = 3;
-                ctx.strokeRect(this.x - game.camera.x - size/2, this.y - game.camera.y - size/2, size, size);
-            }
+        ctx.fillStyle = this.attackFlash > 0 ? "#ffff99" : "#e6d4a8";
+        ctx.beginPath();
+        ctx.arc(drawX + this.width / 2, drawY + this.width / 2, this.width / 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#8b7355";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(drawX + this.width / 2 - 4, drawY + 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(drawX + this.width / 2 + 4, drawY + 6, 2, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.strokeStyle = "#000";
+        ctx.beginPath();
+        ctx.moveTo(drawX + this.width / 2 - 3, drawY + 12);
+        ctx.lineTo(drawX + this.width / 2 + 3, drawY + 12);
+        ctx.stroke();
+
+        ctx.fillStyle = "#ff6600";
+        let markerX = drawX + this.width / 2;
+        let markerY = drawY + this.width / 2;
+        if (this.direction === 0) markerY += 8;
+        else if (this.direction === 1) markerY -= 8;
+        else if (this.direction === 2) markerX -= 8;
+        else if (this.direction === 3) markerX += 8;
+        ctx.fillRect(markerX - 2, markerY - 2, 4, 4);
+      }
+
+      melee() {
+        if (game.isGameOver || this.attackCooldown > 0) return;
+        this.attackCooldown = 20;
+        this.attackFlash = 8;
+
+        let offsetX = 0, offsetY = 0;
+        if (this.direction === 0) offsetY = this.attackRange;
+        else if (this.direction === 1) offsetY = -this.attackRange;
+        else if (this.direction === 2) offsetX = -this.attackRange;
+        else if (this.direction === 3) offsetX = this.attackRange;
+
+        game.attacks.push(new AttackEffect(this.x + this.width / 2 + offsetX, this.y + this.height / 2 + offsetY));
+
+        for (const enemy of game.enemies) {
+          const dx = enemy.x - this.x;
+          const dy = enemy.y - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < this.attackRange + 20) enemy.takeDamage(this.attackDamage);
         }
 
-        // Enemy Attack Indicator class
-        class EnemyAttackIndicator {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.lifetime = 20;
-                this.maxLifetime = 20;
-                this.radius = 5;
-            }
+        if (game.boss && game.boss.active) {
+          const dx = game.boss.x - this.x;
+          const dy = game.boss.y - this.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < this.attackRange + 20) game.boss.takeDamage(this.attackDamage);
+        }
+      }
 
-            update() {
-                this.lifetime--;
-                this.radius += 1;
-            }
+      shoot() {
+        if (game.isGameOver) return;
 
-            draw(ctx) {
-                const alpha = this.lifetime / this.maxLifetime;
-                ctx.strokeStyle = `rgba(255, 100, 100, ${alpha})`;
-                ctx.lineWidth = 3;
-                ctx.beginPath();
-                ctx.arc(this.x - game.camera.x, this.y - game.camera.y, this.radius, 0, Math.PI * 2);
-                ctx.stroke();
-            }
+        if (this.currentAmmo === 0) {
+          if (!this.isReloading) {
+            this.isReloading = true;
+            this.reloadProgress = 0;
+          }
+          return;
         }
 
-        // Player class
-        class Player {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.width = 20;
-                this.height = 20;
-                this.vx = 0;
-                this.vy = 0;
-                this.speed = 3;
-                this.health = 100;
-                this.maxHealth = 100;
-                this.attackCooldown = 0;
-                this.attackRange = 50;
-                this.attackDamage = 15;
-                this.projectileCooldown = 0;
-                this.direction = 0;
-                this.attackFlash = 0;
-                this.bounceOffset = 0;
-                this.lastFootprintTime = 0;
-                
-                // Ammo system
-                this.maxAmmo = 3;
-                this.currentAmmo = 3;
-                this.isReloading = false;
-                this.reloadTime = 120;
-                this.reloadProgress = 0;
+        if (this.projectileCooldown > 0) return;
+        this.projectileCooldown = 10;
 
-                // Health regeneration
-                this.lastDamageTime = 0;
-                this.regenDelay = 300; // 5 seconds at 60fps
-                this.regenRate = 0.05; // Regenerate 5% of max health per second
-            }
+        let vx = 0, vy = 0;
+        if (this.direction === 0) vy = 5;
+        else if (this.direction === 1) vy = -5;
+        else if (this.direction === 2) vx = -5;
+        else if (this.direction === 3) vx = 5;
 
-            update() {
-                // Movement
-                this.x += this.vx;
-                this.y += this.vy;
+        game.projectiles.push(new Projectile(this.x + this.width / 2, this.y + this.height / 2, vx, vy, 25, false));
+        this.currentAmmo--;
+      }
 
-                // World boundaries
-                this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
-                this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
+      takeDamage(amount) {
+        if (game.isGameOver) return;
+        this.health -= amount;
+        if (this.health < 0) this.health = 0;
+        this.lastDamageTime = game.gameTime;
+        document.getElementById("health").textContent = Math.ceil(this.health);
+        if (this.health <= 0) game.isGameOver = true;
+      }
+    }
 
-                // Bounce animation
-                this.bounceOffset = Math.sin(game.gameTime * 0.1) * 2;
+    class Enemy {
+      constructor(x, y, type = "normal") {
+        this.x = x;
+        this.y = y;
+        this.width = 24;
+        this.height = 24;
+        this.health = type === "strong" ? 30 : 15;
+        this.maxHealth = this.health;
+        this.speed = type === "strong" ? 1.5 : 1;
+        this.type = type;
+        this.attackCooldown = 0;
+        this.damage = type === "strong" ? 15 : 10;
+        this.bounceTime = Math.random() * 100;
+      }
+      update() {
+        if (game.isGameOver) return;
+        const dx = game.player.x - this.x;
+        const dy = game.player.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-                // Create footprints and dust when moving
-                if ((this.vx !== 0 || this.vy !== 0) && game.gameTime - this.lastFootprintTime > 8) {
-                    game.footprints.push(new Footprint(this.x + this.width/2, this.y + this.height/2));
-                    for (let i = 0; i < 2; i++) {
-                        game.dust.push(new DustParticle(this.x + this.width/2, this.y + this.height/2));
-                    }
-                    this.lastFootprintTime = game.gameTime;
-                }
-
-                // Cooldowns
-                if (this.attackCooldown > 0) this.attackCooldown--;
-                if (this.projectileCooldown > 0) this.projectileCooldown--;
-                if (this.attackFlash > 0) this.attackFlash--;
-
-                // Reload system
-                if (this.isReloading) {
-                    this.reloadProgress++;
-                    if (this.reloadProgress >= this.reloadTime) {
-                        this.currentAmmo = this.maxAmmo;
-                        this.isReloading = false;
-                        this.reloadProgress = 0;
-                    }
-                }
-
-                // Health regeneration
-                if (game.gameTime - this.lastDamageTime > this.regenDelay && this.health < this.maxHealth) {
-                    this.health = Math.min(this.maxHealth, this.health + this.regenRate);
-                    document.getElementById('health').textContent = Math.ceil(this.health);
-                }
-            }
-
-            draw(ctx) {
-                const drawX = this.x - game.camera.x;
-                const drawY = this.y - game.camera.y + this.bounceOffset;
-
-                // Draw body (tan/beige color)
-                ctx.fillStyle = this.attackFlash > 0 ? '#ffff99' : '#e6d4a8';
-                ctx.beginPath();
-                ctx.arc(drawX + this.width/2, drawY + this.width/2, this.width/2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Draw outline
-                ctx.strokeStyle = '#8b7355';
-                ctx.lineWidth = 1;
-                ctx.stroke();
-
-                // Draw left eye
-                ctx.fillStyle = '#000000';
-                ctx.beginPath();
-                ctx.arc(drawX + this.width/2 - 4, drawY + 6, 2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Draw right eye
-                ctx.beginPath();
-                ctx.arc(drawX + this.width/2 + 4, drawY + 6, 2, 0, Math.PI * 2);
-                ctx.fill();
-
-                // Draw mouth (simple line)
-                ctx.strokeStyle = '#000000';
-                ctx.lineWidth = 1;
-                ctx.beginPath();
-                ctx.moveTo(drawX + this.width/2 - 3, drawY + 12);
-                ctx.lineTo(drawX + this.width/2 + 3, drawY + 12);
-                ctx.stroke();
-
-                // Draw direction indicator (hat/direction marker)
-                ctx.fillStyle = '#ff6600';
-                let markerX = drawX + this.width/2;
-                let markerY = drawY + this.width/2;
-                
-                if (this.direction === 0) markerY += 8; // down
-                else if (this.direction === 1) markerY -= 8; // up
-                else if (this.direction === 2) markerX -= 8; // left
-                else if (this.direction === 3) markerX += 8; // right
-
-                ctx.fillRect(markerX - 2, markerY - 2, 4, 4);
-            }
-
-            melee() {
-                if (this.attackCooldown > 0) return;
-                this.attackCooldown = 20;
-                this.attackFlash = 8;
-
-                let offsetX = 0, offsetY = 0;
-                if (this.direction === 0) offsetY = this.attackRange;
-                else if (this.direction === 1) offsetY = -this.attackRange;
-                else if (this.direction === 2) offsetX = -this.attackRange;
-                else if (this.direction === 3) offsetX = this.attackRange;
-
-                game.attacks.push(new AttackEffect(
-                    this.x + this.width/2 + offsetX,
-                    this.y + this.height/2 + offsetY,
-                    this.direction
-                ));
-
-                for (let enemy of game.enemies) {
-                    const dx = enemy.x - this.x;
-                    const dy = enemy.y - this.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist < this.attackRange + 20) {
-                        enemy.takeDamage(this.attackDamage);
-                    }
-                }
-
-                if (game.boss && game.boss.active) {
-                    const dx = game.boss.x - this.x;
-                    const dy = game.boss.y - this.y;
-                    const dist = Math.sqrt(dx*dx + dy*dy);
-                    if (dist < this.attackRange + 20) {
-                        game.boss.takeDamage(this.attackDamage);
-                    }
-                }
-            }
-
-            shoot() {
-                if (this.currentAmmo === 0) {
-                    if (!this.isReloading) {
-                        this.isReloading = true;
-                        this.reloadProgress = 0;
-                    }
-                    return;
-                }
-
-                if (this.projectileCooldown > 0) return;
-                this.projectileCooldown = 10;
-
-                let vx = 0, vy = 0;
-                if (this.direction === 0) vy = 5;
-                else if (this.direction === 1) vy = -5;
-                else if (this.direction === 2) vx = -5;
-                else if (this.direction === 3) vx = 5;
-
-                game.projectiles.push(new Projectile(
-                    this.x + this.width/2,
-                    this.y + this.height/2,
-                    vx,
-                    vy,
-                    25
-                ));
-
-                this.currentAmmo--;
-                document.getElementById('ammoCount').textContent = this.currentAmmo;
-            }
-
-            takeDamage(amount) {
-                this.health -= amount;
-                if (this.health < 0) this.health = 0;
-                this.lastDamageTime = game.gameTime;
-                document.getElementById('health').textContent = Math.ceil(this.health);
-            }
+        if (dist > 0) {
+          this.x += (dx / dist) * this.speed;
+          this.y += (dy / dist) * this.speed;
         }
 
-        // Enemy class (Slime)
-        class Enemy {
-            constructor(x, y, type = 'normal') {
-                this.x = x;
-                this.y = y;
-                this.width = 24;
-                this.height = 24;
-                this.health = type === 'strong' ? 30 : 15;
-                this.maxHealth = this.health;
-                this.speed = type === 'strong' ? 1.5 : 1;
-                this.type = type;
-                this.attackCooldown = 0;
-                this.damage = type === 'strong' ? 15 : 10;
-                this.bounceTime = Math.random() * 100;
-            }
+        this.bounceTime += 1;
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        if (dist < 40 && this.attackCooldown === 0) {
+          game.attackIndicators.push(new EnemyAttackIndicator(game.player.x, game.player.y));
+          game.player.takeDamage(this.damage);
+          this.attackCooldown = 60;
+        }
+      }
+      draw() {
+        const drawX = this.x - game.camera.x;
+        const drawY = this.y - game.camera.y;
+        const bounceOffset = Math.sin(this.bounceTime * 0.15) * 3;
 
-            update() {
-                const dx = game.player.x - this.x;
-                const dy = game.player.y - this.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
+        const bodyColor = this.type === "strong" ? "#ff8800" : "#00ff00";
+        const outlineColor = this.type === "strong" ? "#cc6600" : "#00cc00";
 
-                if (dist > 0) {
-                    this.x += (dx / dist) * this.speed;
-                    this.y += (dy / dist) * this.speed;
-                }
+        ctx.fillStyle = bodyColor;
+        ctx.beginPath();
+        ctx.ellipse(drawX + this.width / 2, drawY + this.height / 2 + bounceOffset, this.width / 2, this.height / 2.2, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-                this.bounceTime += 1;
+        ctx.strokeStyle = outlineColor;
+        ctx.lineWidth = 2;
+        ctx.stroke();
 
-                if (this.attackCooldown > 0) this.attackCooldown--;
-                if (dist < 40 && this.attackCooldown === 0) {
-                    // Show attack indicator
-                    game.attackIndicators.push(new EnemyAttackIndicator(
-                        game.player.x,
-                        game.player.y
-                    ));
-                    game.player.takeDamage(this.damage);
-                    this.attackCooldown = 60;
-                }
-            }
+        ctx.fillStyle = "rgba(255,255,255,0.3)";
+        ctx.beginPath();
+        ctx.ellipse(drawX + this.width / 2 - 3, drawY + this.height / 2 - 3 + bounceOffset, this.width / 6, this.height / 6, 0, 0, Math.PI * 2);
+        ctx.fill();
 
-            draw(ctx) {
-                const drawX = this.x - game.camera.x;
-                const drawY = this.y - game.camera.y;
-                const bounceOffset = Math.sin(this.bounceTime * 0.15) * 3;
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(drawX + this.width / 2 - 5, drawY + this.height / 2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
+        ctx.fill();
 
-                const bodyColor = this.type === 'strong' ? '#ff8800' : '#00ff00';
-                const outlineColor = this.type === 'strong' ? '#cc6600' : '#00cc00';
+        ctx.beginPath();
+        ctx.arc(drawX + this.width / 2 + 5, drawY + this.height / 2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
+        ctx.fill();
 
-                ctx.fillStyle = bodyColor;
-                ctx.beginPath();
-                ctx.ellipse(drawX + this.width/2, drawY + this.height/2 + bounceOffset, this.width/2, this.height/2.2, 0, 0, Math.PI * 2);
-                ctx.fill();
+        ctx.fillStyle = "#f00";
+        ctx.fillRect(drawX, drawY - 8, this.width, 3);
+        ctx.fillStyle = "#0f0";
+        ctx.fillRect(drawX, drawY - 8, this.width * (this.health / this.maxHealth), 3);
+      }
+      takeDamage(amount) {
+        this.health -= amount;
+      }
+    }
 
-                ctx.strokeStyle = outlineColor;
-                ctx.lineWidth = 2;
-                ctx.stroke();
+    class Boss {
+      constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.width = 60;
+        this.height = 60;
+        this.health = 1000;
+        this.maxHealth = 1000;
+        this.speed = 1;
+        this.attackCooldown = 0;
+        this.phase = 1;
+        this.active = true;
+      }
+      update() {
+        if (!this.active || game.isGameOver) return;
 
-                ctx.fillStyle = `rgba(255, 255, 255, 0.3)`;
-                ctx.beginPath();
-                ctx.ellipse(drawX + this.width/2 - 3, drawY + this.height/2 - 3 + bounceOffset, this.width/6, this.height/6, 0, 0, Math.PI * 2);
-                ctx.fill();
+        const dx = game.player.x - this.x;
+        const dy = game.player.y - this.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
 
-                ctx.fillStyle = '#000000';
-                ctx.beginPath();
-                ctx.arc(drawX + this.width/2 - 5, drawY + this.height/2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.beginPath();
-                ctx.arc(drawX + this.width/2 + 5, drawY + this.height/2 - 2 + bounceOffset, 2, 0, Math.PI * 2);
-                ctx.fill();
-
-                ctx.fillStyle = '#ff0000';
-                ctx.fillRect(drawX, drawY - 8, this.width, 3);
-                ctx.fillStyle = '#00ff00';
-                const healthBarWidth = this.width * (this.health / this.maxHealth);
-                ctx.fillRect(drawX, drawY - 8, healthBarWidth, 3);
-            }
-
-            takeDamage(amount) {
-                this.health -= amount;
-            }
+        if (dist > 100) {
+          this.x += (dx / dist) * this.speed;
+          this.y += (dy / dist) * this.speed;
+        } else if (dist < 80 && dist > 0) {
+          this.x -= (dx / dist) * this.speed * 0.5;
+          this.y -= (dy / dist) * this.speed * 0.5;
         }
 
-        // Boss class
-        class Boss {
-            constructor(x, y) {
-                this.x = x;
-                this.y = y;
-                this.width = 60;
-                this.height = 60;
-                this.health = 1000;
-                this.maxHealth = 1000;
-                this.speed = 1;
-                this.attackCooldown = 0;
-                this.damage = 25;
-                this.phase = 1;
-                this.actionCooldown = 0;
-                this.active = true;
-            }
-
-            update() {
-                if (!this.active) return;
-
-                const dx = game.player.x - this.x;
-                const dy = game.player.y - this.y;
-                const dist = Math.sqrt(dx*dx + dy*dy);
-
-                if (dist > 100) {
-                    this.x += (dx / dist) * this.speed;
-                    this.y += (dy / dist) * this.speed;
-                } else if (dist < 80) {
-                    this.x -= (dx / dist) * (this.speed * 0.5);
-                    this.y -= (dy / dist) * (this.speed * 0.5);
-                }
-
-                if (this.attackCooldown > 0) this.attackCooldown--;
-                if (dist < 150 && this.attackCooldown === 0) {
-                    this.attack();
-                    this.attackCooldown = 90;
-                }
-
-                if (this.health < this.maxHealth * 0.5) {
-                    this.phase = 2;
-                    this.speed = 1.5;
-                }
-
-                this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
-                this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
-            }
-
-            attack() {
-                const projectileCount = this.phase === 1 ? 4 : 8;
-                for (let i = 0; i < projectileCount; i++) {
-                    const angle = (Math.PI * 2 * i) / projectileCount;
-                    const vx = Math.cos(angle) * 3;
-                    const vy = Math.sin(angle) * 3;
-                    game.projectiles.push(new Projectile(
-                        this.x + this.width/2,
-                        this.y + this.height/2,
-                        vx,
-                        vy,
-                        5,
-                        true
-                    ));
-                }
-            }
-
-            draw(ctx) {
-                ctx.fillStyle = '#ff00ff';
-                ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.width, this.height);
-
-                ctx.fillStyle = '#ff0000';
-                ctx.fillRect(this.x - game.camera.x - 5, this.y - game.camera.y - 15, this.width + 10, 8);
-                ctx.fillStyle = '#00ff00';
-                const healthBarWidth = (this.width + 10) * (this.health / this.maxHealth);
-                ctx.fillRect(this.x - game.camera.x - 5, this.y - game.camera.y - 15, healthBarWidth, 8);
-            }
-
-            takeDamage(amount) {
-                this.health -= amount;
-                if (this.health <= 0) {
-                    this.active = false;
-                }
-            }
+        if (this.attackCooldown > 0) this.attackCooldown--;
+        if (dist < 150 && this.attackCooldown === 0) {
+          this.attack();
+          this.attackCooldown = 90;
         }
 
-        // Projectile class
-        class Projectile {
-            constructor(x, y, vx, vy, damage, isEnemyProjectile = false) {
-                this.x = x;
-                this.y = y;
-                this.vx = vx;
-                this.vy = vy;
-                this.damage = damage;
-                this.size = 6;
-                this.isEnemyProjectile = isEnemyProjectile;
-                this.lifetime = 300;
-            }
-
-            update() {
-                this.x += this.vx;
-                this.y += this.vy;
-                this.lifetime--;
-
-                if (!this.isEnemyProjectile) {
-                    for (let enemy of game.enemies) {
-                        if (this.collidesWith(enemy)) {
-                            enemy.takeDamage(this.damage);
-                            this.lifetime = 0;
-                        }
-                    }
-                    if (game.boss && game.boss.active && this.collidesWith(game.boss)) {
-                        game.boss.takeDamage(this.damage);
-                        this.lifetime = 0;
-                    }
-                } else {
-                    if (this.collidesWith(game.player)) {
-                        // Show attack indicator
-                        game.attackIndicators.push(new EnemyAttackIndicator(
-                            game.player.x,
-                            game.player.y
-                        ));
-                        game.player.takeDamage(this.damage);
-                        this.lifetime = 0;
-                    }
-                }
-            }
-
-            collidesWith(obj) {
-                return Math.abs(this.x - (obj.x + obj.width/2)) < this.size + obj.width/2 &&
-                       Math.abs(this.y - (obj.y + obj.height/2)) < this.size + obj.height/2;
-            }
-
-            draw(ctx) {
-                ctx.fillStyle = this.isEnemyProjectile ? '#ff00ff' : '#ffff00';
-                ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.size, this.size);
-            }
+        if (this.health < this.maxHealth * 0.5) {
+          this.phase = 2;
+          this.speed = 1.5;
         }
 
-        const keys = {};
-        window.addEventListener('keydown', (e) => {
-            keys[e.key.toLowerCase()] = true;
-            if (e.key === ' ') {
-                e.preventDefault();
-                game.player.shoot();
-            }
-        });
-        window.addEventListener('keyup', (e) => {
-            keys[e.key.toLowerCase()] = false;
-        });
-
-        canvas.addEventListener('click', () => {
-            game.player.melee();
-        });
-
-        function handleInput() {
-            game.player.vx = 0;
-            game.player.vy = 0;
-
-            const dirs = {
-                'w': [0, -1], 'arrowup': [0, -1],
-                's': [0, 1], 'arrowdown': [0, 1],
-                'a': [-1, 0], 'arrowleft': [-1, 0],
-                'd': [1, 0], 'arrowright': [1, 0]
-            };
-
-            for (let key in dirs) {
-                if (keys[key]) {
-                    game.player.vx += dirs[key][0] * game.player.speed;
-                    game.player.vy += dirs[key][1] * game.player.speed;
-                    game.player.direction = key === 'w' || key === 'arrowup' ? 1 : 
-                                           key === 's' || key === 'arrowdown' ? 0 : 
-                                           key === 'a' || key === 'arrowleft' ? 2 : 3;
-                }
-            }
+        this.x = Math.max(0, Math.min(this.x, WORLD_WIDTH - this.width));
+        this.y = Math.max(0, Math.min(this.y, WORLD_HEIGHT - this.height));
+      }
+      attack() {
+        const projectileCount = this.phase === 1 ? 4 : 8;
+        for (let i = 0; i < projectileCount; i++) {
+          const angle = (Math.PI * 2 * i) / projectileCount;
+          game.projectiles.push(new Projectile(
+            this.x + this.width / 2,
+            this.y + this.height / 2,
+            Math.cos(angle) * 3,
+            Math.sin(angle) * 3,
+            5,
+            true
+          ));
         }
+      }
+      draw() {
+        ctx.fillStyle = "#ff00ff";
+        ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.width, this.height);
 
-        function spawnEnemies() {
-            if (Math.random() < game.enemySpawnRate && game.enemies.length < 20) {
-                const side = Math.floor(Math.random() * 4);
-                let x, y;
-                if (side === 0) { x = Math.random() * WORLD_WIDTH; y = -20; }
-                else if (side === 1) { x = WORLD_WIDTH + 20; y = Math.random() * WORLD_HEIGHT; }
-                else if (side === 2) { x = Math.random() * WORLD_WIDTH; y = WORLD_HEIGHT + 20; }
-                else { x = -20; y = Math.random() * WORLD_HEIGHT; }
-                
-                const type = Math.random() < 0.3 ? 'strong' : 'normal';
-                game.enemies.push(new Enemy(x, y, type));
+        ctx.fillStyle = "#f00";
+        ctx.fillRect(this.x - game.camera.x - 5, this.y - game.camera.y - 15, this.width + 10, 8);
+        ctx.fillStyle = "#0f0";
+        ctx.fillRect(this.x - game.camera.x - 5, this.y - game.camera.y - 15, (this.width + 10) * (this.health / this.maxHealth), 8);
+      }
+      takeDamage(amount) {
+        this.health -= amount;
+        if (this.health <= 0) this.active = false;
+      }
+    }
+
+    class Projectile {
+      constructor(x, y, vx, vy, damage, isEnemyProjectile = false) {
+        this.x = x;
+        this.y = y;
+        this.vx = vx;
+        this.vy = vy;
+        this.damage = damage;
+        this.size = 6;
+        this.isEnemyProjectile = isEnemyProjectile;
+        this.lifetime = 300;
+      }
+      update() {
+        if (game.isGameOver) return;
+        this.x += this.vx;
+        this.y += this.vy;
+        this.lifetime--;
+
+        if (!this.isEnemyProjectile) {
+          for (const enemy of game.enemies) {
+            if (this.collidesWith(enemy)) {
+              enemy.takeDamage(this.damage);
+              this.lifetime = 0;
+              break;
             }
+          }
+          if (game.boss && game.boss.active && this.collidesWith(game.boss)) {
+            game.boss.takeDamage(this.damage);
+            this.lifetime = 0;
+          }
+        } else {
+          if (this.collidesWith(game.player)) {
+            game.attackIndicators.push(new EnemyAttackIndicator(game.player.x, game.player.y));
+            game.player.takeDamage(this.damage);
+            this.lifetime = 0;
+          }
         }
+      }
+      collidesWith(obj) {
+        return Math.abs(this.x - (obj.x + obj.width / 2)) < this.size + obj.width / 2 &&
+               Math.abs(this.y - (obj.y + obj.height / 2)) < this.size + obj.height / 2;
+      }
+      draw() {
+        ctx.fillStyle = this.isEnemyProjectile ? "#ff00ff" : "#ffff00";
+        ctx.fillRect(this.x - game.camera.x, this.y - game.camera.y, this.size, this.size);
+      }
+    }
 
-        function spawnBoss() {
-            if (!game.boss || !game.boss.active) {
-                game.boss = new Boss(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
-                document.getElementById('bossHealth').style.display = 'block';
-            }
+    const keys = {};
+
+    function resetGame() {
+      game.enemies = [];
+      game.projectiles = [];
+      game.attacks = [];
+      game.attackIndicators = [];
+      game.footprints = [];
+      game.dust = [];
+      game.boss = null;
+      game.gameTime = 0;
+      game.enemiesKilled = 0;
+      game.isGameOver = false;
+
+      game.player = new Player(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+
+      document.getElementById("health").textContent = "100";
+      document.getElementById("enemiesKilled").textContent = "0";
+      document.getElementById("ammoCount").textContent = "3";
+      document.getElementById("reloadBar").style.display = "none";
+      document.getElementById("bossHealth").style.display = "none";
+      document.getElementById("bossHealthBar").textContent = "0";
+    }
+
+    window.addEventListener("keydown", (e) => {
+      const key = e.key.toLowerCase();
+      keys[key] = true;
+
+      if (key === "r" && game.isGameOver) {
+        resetGame();
+        return;
+      }
+
+      if (e.key === " ") {
+        e.preventDefault();
+        if (!game.isGameOver) game.player.shoot();
+      }
+    });
+
+    window.addEventListener("keyup", (e) => {
+      keys[e.key.toLowerCase()] = false;
+    });
+
+    canvas.addEventListener("click", () => {
+      if (!game.isGameOver) game.player.melee();
+    });
+
+    function handleInput() {
+      if (game.isGameOver) {
+        game.player.vx = 0;
+        game.player.vy = 0;
+        return;
+      }
+
+      game.player.vx = 0;
+      game.player.vy = 0;
+
+      const dirs = {
+        w: [0, -1], arrowup: [0, -1],
+        s: [0, 1], arrowdown: [0, 1],
+        a: [-1, 0], arrowleft: [-1, 0],
+        d: [1, 0], arrowright: [1, 0]
+      };
+
+      for (const key in dirs) {
+        if (keys[key]) {
+          game.player.vx += dirs[key][0] * game.player.speed;
+          game.player.vy += dirs[key][1] * game.player.speed;
+          game.player.direction =
+            key === "w" || key === "arrowup" ? 1 :
+            key === "s" || key === "arrowdown" ? 0 :
+            key === "a" || key === "arrowleft" ? 2 : 3;
         }
+      }
+    }
 
-        function updateCamera() {
-            game.camera.x = game.player.x - canvas.width / 2;
-            game.camera.y = game.player.y - canvas.height / 2;
-            game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
-            game.camera.y = Math.max(0, Math.min(game.camera.y, WORLD_HEIGHT - canvas.height));
+    function spawnEnemies() {
+      if (game.isGameOver) return;
+
+      if (Math.random() < game.enemySpawnRate && game.enemies.length < 20) {
+        const side = Math.floor(Math.random() * 4);
+        let x, y;
+        if (side === 0) { x = Math.random() * WORLD_WIDTH; y = -20; }
+        else if (side === 1) { x = WORLD_WIDTH + 20; y = Math.random() * WORLD_HEIGHT; }
+        else if (side === 2) { x = Math.random() * WORLD_WIDTH; y = WORLD_HEIGHT + 20; }
+        else { x = -20; y = Math.random() * WORLD_HEIGHT; }
+
+        const type = Math.random() < 0.3 ? "strong" : "normal";
+        game.enemies.push(new Enemy(x, y, type));
+      }
+    }
+
+    function spawnBoss() {
+      if (!game.boss || !game.boss.active) {
+        game.boss = new Boss(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+        document.getElementById("bossHealth").style.display = "block";
+      }
+    }
+
+    function updateCamera() {
+      game.camera.x = game.player.x - canvas.width / 2;
+      game.camera.y = game.player.y - canvas.height / 2;
+      game.camera.x = Math.max(0, Math.min(game.camera.x, WORLD_WIDTH - canvas.width));
+      game.camera.y = Math.max(0, Math.min(game.camera.y, WORLD_HEIGHT - canvas.height));
+    }
+
+    function drawTerrain() {
+      ctx.fillStyle = "#050510";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      const startX = Math.floor(game.camera.x / TILE_SIZE);
+      const startY = Math.floor(game.camera.y / TILE_SIZE);
+      const endX = Math.ceil((game.camera.x + canvas.width) / TILE_SIZE);
+      const endY = Math.ceil((game.camera.y + canvas.height) / TILE_SIZE);
+
+      const colors = ["#ff00ff", "#00ffff", "#ff00aa", "#00ffaa"];
+      const seededRandom = (seed) => {
+        const x = Math.sin(seed) * 10000;
+        return x - Math.floor(x);
+      };
+
+      for (let tileX = startX; tileX < endX; tileX++) {
+        for (let tileY = startY; tileY < endY; tileY++) {
+          const seed = (tileX * 73856093) ^ (tileY * 19349663);
+          const colorIndex = Math.floor(seededRandom(seed) * colors.length);
+
+          const screenX = tileX * TILE_SIZE - game.camera.x;
+          const screenY = tileY * TILE_SIZE - game.camera.y;
+
+          ctx.fillStyle = colors[colorIndex];
+          ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+          ctx.strokeStyle = "rgba(0,0,0,0.3)";
+          ctx.lineWidth = 0.5;
+          ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+
+          const crystalCount = 3 + Math.floor(seededRandom(seed + 1) * 3);
+          for (let i = 0; i < crystalCount; i++) {
+            const crystalSeed = seed + i * 12345;
+            const localX = seededRandom(crystalSeed) * TILE_SIZE;
+            const localY = seededRandom(crystalSeed + 1) * TILE_SIZE;
+            const cx = screenX + localX;
+            const cy = screenY + localY;
+            const crystalColor = colors[Math.floor(seededRandom(crystalSeed + 2) * colors.length)];
+            const crystalHeight = 8 + seededRandom(crystalSeed + 3) * 12;
+
+            ctx.fillStyle = crystalColor;
+            ctx.globalAlpha = 0.6;
+            ctx.beginPath();
+            ctx.moveTo(cx, cy);
+            ctx.lineTo(cx + 4, cy + crystalHeight);
+            ctx.lineTo(cx - 4, cy + crystalHeight);
+            ctx.closePath();
+            ctx.fill();
+            ctx.globalAlpha = 1;
+          }
         }
+      }
+    }
 
-        function drawTerrain() {
-            ctx.fillStyle = '#050510';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+    function update() {
+      game.gameTime++;
 
-            const startX = Math.floor(game.camera.x / TILE_SIZE);
-            const startY = Math.floor(game.camera.y / TILE_SIZE);
-            const endX = Math.ceil((game.camera.x + canvas.width) / TILE_SIZE);
-            const endY = Math.ceil((game.camera.y + canvas.height) / TILE_SIZE);
+      if (game.isGameOver) {
+        updateCamera();
+        return;
+      }
 
-            const colors = ['#ff00ff', '#00ffff', '#ff00aa', '#00ffaa'];
-            const seededRandom = (seed) => {
-                const x = Math.sin(seed) * 10000;
-                return x - Math.floor(x);
-            };
+      handleInput();
+      spawnEnemies();
 
-            for (let tileX = startX; tileX < endX; tileX++) {
-                for (let tileY = startY; tileY < endY; tileY++) {
-                    const seed = tileX * 73856093 ^ tileY * 19349663;
-                    const rand = seededRandom(seed);
-                    const colorIndex = Math.floor(rand * colors.length);
-                    ctx.fillStyle = colors[colorIndex];
+      if (game.enemiesKilled >= 15 && !game.boss) {
+        spawnBoss();
+      }
 
-                    const screenX = tileX * TILE_SIZE - game.camera.x;
-                    const screenY = tileY * TILE_SIZE - game.camera.y;
-                    ctx.fillRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      game.player.update();
 
-                    ctx.strokeStyle = 'rgba(0, 0, 0, 0.3)';
-                    ctx.lineWidth = 0.5;
-                    ctx.strokeRect(screenX, screenY, TILE_SIZE, TILE_SIZE);
+      for (const enemy of game.enemies) enemy.update();
 
-                    // Draw crystals
-                    const crystalCount = 3 + Math.floor(seededRandom(seed + 1) * 3);
-                    for (let i = 0; i < crystalCount; i++) {
-                        const crystalSeed = seed + i * 12345;
-                        const localX = seededRandom(crystalSeed) * TILE_SIZE;
-                        const localY = seededRandom(crystalSeed + 1) * TILE_SIZE;
-                        const cx = screenX + localX;
-                        const cy = screenY + localY;
-                        const crystalColor = colors[Math.floor(seededRandom(crystalSeed + 2) * colors.length)];
-                        const crystalHeight = 8 + seededRandom(crystalSeed + 3) * 12;
+      if (game.boss && game.boss.active) {
+        game.boss.update();
+        document.getElementById("bossHealthBar").textContent = Math.ceil(game.boss.health);
+      }
 
-                        ctx.fillStyle = crystalColor;
-                        ctx.globalAlpha = 0.6;
-                        ctx.beginPath();
-                        ctx.moveTo(cx, cy);
-                        ctx.lineTo(cx + 4, cy + crystalHeight);
-                        ctx.lineTo(cx - 4, cy + crystalHeight);
-                        ctx.closePath();
-                        ctx.fill();
-                        ctx.globalAlpha = 1;
-                    }
-                }
-            }
-        }
+      for (const projectile of game.projectiles) projectile.update();
+      for (const attack of game.attacks) attack.update();
+      for (const footprint of game.footprints) footprint.update();
+      for (const dust of game.dust) dust.update();
+      for (const indicator of game.attackIndicators) indicator.update();
 
-        function update() {
-            game.gameTime++;
-            handleInput();
-            spawnEnemies();
-            
-            if (game.enemiesKilled >= 15 && !game.boss) {
-                spawnBoss();
-            }
+      game.projectiles = game.projectiles.filter(p => p.lifetime > 0);
+      game.attacks = game.attacks.filter(a => a.lifetime > 0);
 
-            game.player.update();
-            
-            for (let enemy of game.enemies) {
-                enemy.update();
-            }
+      const newEnemies = game.enemies.filter(e => e.health > 0);
+      const killedThisFrame = game.enemies.length - newEnemies.length;
+      game.enemiesKilled += killedThisFrame;
+      game.enemies = newEnemies;
 
-            if (game.boss && game.boss.active) {
-                game.boss.update();
-                document.getElementById('bossHealthBar').textContent = Math.ceil(game.boss.health);
-            }
+      game.footprints = game.footprints.filter(f => f.lifetime > 0);
+      game.dust = game.dust.filter(d => d.lifetime > 0);
+      game.attackIndicators = game.attackIndicators.filter(i => i.lifetime > 0);
 
-            for (let projectile of game.projectiles) {
-                projectile.update();
-            }
+      document.getElementById("health").textContent = Math.ceil(game.player.health);
+      document.getElementById("enemiesKilled").textContent = Math.min(game.enemiesKilled, 15);
+      document.getElementById("ammoCount").textContent = game.player.currentAmmo;
 
-            for (let attack of game.attacks) {
-                attack.update();
-            }
+      if (game.player.isReloading) {
+        document.getElementById("reloadBar").style.display = "block";
+        const percent = Math.floor((game.player.reloadProgress / game.player.reloadTime) * 100);
+        document.getElementById("reloadPercent").textContent = percent;
+      } else {
+        document.getElementById("reloadBar").style.display = "none";
+      }
 
-            for (let footprint of game.footprints) {
-                footprint.update();
-            }
+      updateCamera();
+    }
 
-            for (let dust of game.dust) {
-                dust.update();
-            }
+    function draw() {
+      drawTerrain();
 
-            for (let indicator of game.attackIndicators) {
-                indicator.update();
-            }
+      for (const footprint of game.footprints) footprint.draw();
+      for (const dust of game.dust) dust.draw();
+      for (const projectile of game.projectiles) projectile.draw();
+      for (const enemy of game.enemies) enemy.draw();
 
-            game.projectiles = game.projectiles.filter(p => p.lifetime > 0);
-            game.attacks = game.attacks.filter(a => a.lifetime > 0);
+      if (game.boss && game.boss.active) game.boss.draw();
 
-            // Track enemies killed
-            const newEnemies = game.enemies.filter(e => e.health > 0);
-            const killedThisFrame = game.enemies.length - newEnemies.length;
-            game.enemiesKilled += killedThisFrame;
+      for (const attack of game.attacks) attack.draw();
+      for (const indicator of game.attackIndicators) indicator.draw();
 
-            game.enemies = newEnemies;
-            game.footprints = game.footprints.filter(f => f.lifetime > 0);
-            game.dust = game.dust.filter(d => d.lifetime > 0);
-            game.attackIndicators = game.attackIndicators.filter(i => i.lifetime > 0);
+      game.player.draw();
 
-            document.getElementById('enemiesKilled').textContent = Math.min(game.enemiesKilled, 15);
+      if (game.isGameOver) {
+        ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Reload UI
-            if (game.player.isReloading) {
-                document.getElementById('reloadBar').style.display = 'block';
-                const percent = Math.floor((game.player.reloadProgress / game.player.reloadTime) * 100);
-                document.getElementById('reloadPercent').textContent = percent;
-            } else {
-                document.getElementById('reloadBar').style.display = 'none';
-            }
-            document.getElementById('ammoCount').textContent = game.player.currentAmmo;
+        ctx.fillStyle = "#ff4444";
+        ctx.font = "bold 56px Arial";
+        ctx.textAlign = "center";
+        ctx.fillText("GAME OVER", canvas.width / 2, canvas.height / 2 - 20);
 
-            updateCamera();
-        }
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "24px Arial";
+        ctx.fillText("Press R to restart", canvas.width / 2, canvas.height / 2 + 30);
+        ctx.textAlign = "left";
+      }
+    }
 
-        function draw() {
-            drawTerrain();
+    function gameLoop() {
+      update();
+      draw();
+      requestAnimationFrame(gameLoop);
+    }
 
-            for (let footprint of game.footprints) {
-                footprint.draw(ctx);
-            }
-
-            for (let dust of game.dust) {
-                dust.draw(ctx);
-            }
-
-            for (let projectile of game.projectiles) {
-                projectile.draw(ctx);
-            }
-
-            for (let enemy of game.enemies) {
-                enemy.draw(ctx);
-            }
-
-            if (game.boss && game.boss.active) {
-                game.boss.draw(ctx);
-            }
-
-            for (let attack of game.attacks) {
-                attack.draw(ctx);
-            }
-
-            for (let indicator of game.attackIndicators) {
-                indicator.draw(ctx);
-            }
-
-            game.player.draw(ctx);
-        }
-
-        function gameLoop() {
-            update();
-            draw();
-            requestAnimationFrame(gameLoop);
-        }
-
-        // Initialize game
-        game.player = new Player(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
-        game.attackIndicators = [];
-        gameLoop();
-    </script>
+    game.player = new Player(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
+    game.attackIndicators = [];
+    gameLoop();
+  </script>
 </body>
 </html>
