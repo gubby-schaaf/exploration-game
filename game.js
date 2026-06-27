@@ -192,7 +192,7 @@ function shockwave() {
 function meteorStrike() {
   if (game.over || player.meteorCd > 0 || game.meteor) return;
 
-  player.meteorCd = 60 * 120; // 2 minutes at 60fps
+  player.meteorCd = 60 * 60; // 1 minute at 60fps
   game.meteor = {
     x: rand(220, canvas.width - 220),
     y: -120,
