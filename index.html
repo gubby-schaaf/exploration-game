@@ -164,25 +164,36 @@
       if (game.over || player.shockCd > 0) return;
       player.shockCd = 360;
 
-      // animation pulse
+      // bigger animation pulse
       game.shockwaves.push({
         x: player.x,
         y: player.y,
         r: 10,
-        maxR: 190,
-        life: 22
+        maxR: 260,
+        life: 26
       });
+
+      const radius = 230;   // bigger range
+      const baseForce = 95; // EXTREME force
 
       for (const e of game.enemies) {
         const dx = e.x - player.x;
         const dy = e.y - player.y;
         const d = Math.hypot(dx, dy);
 
-        if (d > 0 && d < 170) {
-          const force = (1 - d / 170) * 20;
-          e.x += (dx / d) * force * 3;
-          e.y += (dy / d) * force * 3;
-          e.hp -= 8;
+        if (d > 0 && d < radius) {
+          const nx = dx / d;
+          const ny = dy / d;
+
+          // massive knockback with falloff
+          const falloff = 1 - (d / radius);
+          const force = baseForce * (0.35 + falloff * 1.65);
+
+          e.x += nx * force;
+          e.y += ny * force;
+
+          // bonus damage
+          e.hp -= 12;
         }
       }
     }
@@ -330,16 +341,14 @@
 
       // shockwave animation
       for (const w of game.shockwaves) {
-        const a = w.life / 22;
+        const a = w.life / 26;
 
-        // outer ring
         ctx.beginPath();
         ctx.arc(w.x, w.y, w.r, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(102, 217, 255, ${0.9 * a})`;
         ctx.lineWidth = 6;
         ctx.stroke();
 
-        // inner glow ring
         ctx.beginPath();
         ctx.arc(w.x, w.y, w.r * 0.72, 0, Math.PI * 2);
         ctx.strokeStyle = `rgba(180, 245, 255, ${0.55 * a})`;
