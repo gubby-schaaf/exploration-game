@@ -492,7 +492,14 @@
       }
       takeDamage(amount) {
         this.health -= amount;
-        if (this.health <= 0) this.active = false;
+        if (this.health <= 0) {
+          this.health = 0;
+          this.active = false;
+          const bossHealthEl = document.getElementById("bossHealth");
+          const bossHealthBarEl = document.getElementById("bossHealthBar");
+          if (bossHealthEl) bossHealthEl.style.display = "none";
+          if (bossHealthBarEl) bossHealthBarEl.textContent = "0";
+        }
       }
     }
 
@@ -639,6 +646,7 @@
       if (!game.boss || !game.boss.active) {
         game.boss = new Boss(WORLD_WIDTH / 2, WORLD_HEIGHT / 2);
         document.getElementById("bossHealth").style.display = "block";
+        document.getElementById("bossHealthBar").textContent = String(game.boss.maxHealth);
       }
     }
 
@@ -722,9 +730,14 @@
 
       for (const enemy of game.enemies) enemy.update();
 
-      if (game.boss && game.boss.active) {
-        game.boss.update();
-        document.getElementById("bossHealthBar").textContent = Math.ceil(game.boss.health);
+      if (game.boss) {
+        if (game.boss.active) {
+          game.boss.update();
+          document.getElementById("bossHealthBar").textContent = Math.max(0, Math.ceil(game.boss.health));
+        } else {
+          document.getElementById("bossHealth").style.display = "none";
+          document.getElementById("bossHealthBar").textContent = "0";
+        }
       }
 
       for (const projectile of game.projectiles) projectile.update();
