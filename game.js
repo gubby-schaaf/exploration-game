@@ -20,7 +20,7 @@ const game = {
   enemyShots: [],
   boss: null,
   bossSpawned: false,
-  meteor: null,
+  meteors: [],
   meteorDust: [],
   impactDust: [],
   screenShake: 0
@@ -189,20 +189,33 @@ function shockwave() {
   }
 }
 
-function meteorStrike() {
-  if (game.over || player.meteorCd > 0 || game.meteor) return;
-
-  player.meteorCd = 60 * 60; // 1 minute at 60fps
-  game.meteor = {
-    x: rand(220, canvas.width - 220),
+function createMeteor(x, hitY) {
+  return {
+    x,
     y: -120,
     vx: rand(-0.45, 0.45),
     vy: rand(8.5, 10.5),
     r: rand(36, 50),
     rot: rand(0, Math.PI * 2),
     rotSpeed: rand(-0.06, 0.06),
-    hitY: rand(canvas.height * 0.38, canvas.height * 0.68)
+    hitY
   };
+}
+
+function meteorStrike() {
+  if (game.over || player.meteorCd > 0 || game.meteors.length > 0) return;
+
+  player.meteorCd = 60 * 60; // 1 minute at 60fps
+
+  const centerX = rand(220, canvas.width - 220);
+  const centerHitY = rand(canvas.height * 0.38, canvas.height * 0.68);
+  const spacing = 120;
+
+  game.meteors.push(
+    createMeteor(Math.max(60, centerX - spacing), centerHitY + rand(-30, 30)),
+    createMeteor(centerX, centerHitY + rand(-20, 20)),
+    createMeteor(Math.min(canvas.width - 60, centerX + spacing), centerHitY + rand(-30, 30))
+  );
 }
 
 function applyMeteorImpact(mx, my) {
@@ -305,15 +318,15 @@ function update() {
   game.shockwaves = game.shockwaves.filter(w => w.life > 0);
 
   // Meteor update + falling dust
-  if (game.meteor) {
-    game.meteor.x += game.meteor.vx;
-    game.meteor.y += game.meteor.vy;
-    game.meteor.rot += game.meteor.rotSpeed;
+  for (const meteor of game.meteors) {
+    meteor.x += meteor.vx;
+    meteor.y += meteor.vy;
+    meteor.rot += meteor.rotSpeed;
 
     for (let i = 0; i < 4; i++) {
       game.meteorDust.push({
-        x: game.meteor.x + rand(-8, 8),
-        y: game.meteor.y + rand(-8, 8),
+        x: meteor.x + rand(-8, 8),
+        y: meteor.y + rand(-8, 8),
         vx: rand(-0.9, 0.9),
         vy: rand(0.8, 2.4),
         life: rand(14, 26),
@@ -321,12 +334,20 @@ function update() {
         size: rand(1.4, 3.4)
       });
     }
+  }
 
-    if (game.meteor.y >= game.meteor.hitY) {
-      applyMeteorImpact(game.meteor.x, game.meteor.y);
-      game.meteor = null;
-      game.meteorDust.length = 0;
+  const remainingMeteors = [];
+  for (const meteor of game.meteors) {
+    if (meteor.y >= meteor.hitY) {
+      applyMeteorImpact(meteor.x, meteor.y);
+    } else {
+      remainingMeteors.push(meteor);
     }
+  }
+  game.meteors = remainingMeteors;
+
+  if (game.meteors.length === 0) {
+    game.meteorDust.length = 0;
   }
 
   for (const d of game.meteorDust) {
@@ -545,8 +566,8 @@ function draw() {
     ctx.fill();
   }
 
-  if (game.meteor) {
-    drawMeteorRock(game.meteor);
+  for (const meteor of game.meteors) {
+    drawMeteorRock(meteor);
   }
 
   for (const p of game.impactDust) {
@@ -629,7 +650,7 @@ function restart() {
   game.enemyShots = [];
   game.boss = null;
   game.bossSpawned = false;
-  game.meteor = null;
+  game.meteors = [];
   game.meteorDust = [];
   game.impactDust = [];
   game.screenShake = 0;
