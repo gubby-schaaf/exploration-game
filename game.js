@@ -189,16 +189,17 @@ function shockwave() {
   }
 }
 
-function createMeteor(x, hitY) {
+function createMeteor(x, hitY, delay = 0) {
   return {
     x,
     y: -120,
-    vx: rand(-0.45, 0.45),
-    vy: rand(8.5, 10.5),
+    vx: rand(-0.6, 0.6),
+    vy: rand(8.8, 10.8),
     r: rand(36, 50),
     rot: rand(0, Math.PI * 2),
     rotSpeed: rand(-0.06, 0.06),
-    hitY
+    hitY,
+    delay
   };
 }
 
@@ -207,19 +208,18 @@ function meteorStrike() {
 
   player.meteorCd = 60 * 60; // 1 minute at 60fps
 
-  const centerX = rand(220, canvas.width - 220);
-  const centerHitY = rand(canvas.height * 0.38, canvas.height * 0.68);
-  const spacing = 120;
+  const centerX = rand(240, canvas.width - 240);
+  const centerHitY = rand(canvas.height * 0.4, canvas.height * 0.7);
+  const spacing = 170;
 
   game.meteors.push(
-    createMeteor(Math.max(60, centerX - spacing), centerHitY + rand(-30, 30)),
-    createMeteor(centerX, centerHitY + rand(-20, 20)),
-    createMeteor(Math.min(canvas.width - 60, centerX + spacing), centerHitY + rand(-30, 30))
+    createMeteor(Math.max(70, centerX - spacing), centerHitY + rand(-40, 20), 0),
+    createMeteor(centerX, centerHitY + rand(-10, 10), 12),
+    createMeteor(Math.min(canvas.width - 70, centerX + spacing), centerHitY + rand(-20, 40), 24)
   );
 }
 
 function applyMeteorImpact(mx, my) {
-  // Bring all active slimes down to half max HP (without healing low HP enemies)
   for (const e of game.enemies) {
     if (e.hp > 0) {
       const half = Math.ceil(e.maxHp * 0.5);
@@ -227,7 +227,6 @@ function applyMeteorImpact(mx, my) {
     }
   }
 
-  // Big dust burst
   for (let i = 0; i < 90; i++) {
     const a = rand(0, Math.PI * 2);
     const speed = rand(1.2, 6.2);
@@ -317,8 +316,12 @@ function update() {
   }
   game.shockwaves = game.shockwaves.filter(w => w.life > 0);
 
-  // Meteor update + falling dust
   for (const meteor of game.meteors) {
+    if (meteor.delay > 0) {
+      meteor.delay--;
+      continue;
+    }
+
     meteor.x += meteor.vx;
     meteor.y += meteor.vy;
     meteor.rot += meteor.rotSpeed;
@@ -338,7 +341,9 @@ function update() {
 
   const remainingMeteors = [];
   for (const meteor of game.meteors) {
-    if (meteor.y >= meteor.hitY) {
+    if (meteor.delay > 0) {
+      remainingMeteors.push(meteor);
+    } else if (meteor.y >= meteor.hitY) {
       applyMeteorImpact(meteor.x, meteor.y);
     } else {
       remainingMeteors.push(meteor);
@@ -567,7 +572,9 @@ function draw() {
   }
 
   for (const meteor of game.meteors) {
-    drawMeteorRock(meteor);
+    if (meteor.delay <= 0) {
+      drawMeteorRock(meteor);
+    }
   }
 
   for (const p of game.impactDust) {
