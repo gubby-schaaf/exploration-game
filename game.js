@@ -23,7 +23,8 @@ const game = {
   meteors: [],
   meteorDust: [],
   impactDust: [],
-  screenShake: 0
+  screenShake: 0,
+  meleeSlashes: []
 };
 
 const player = {
@@ -69,7 +70,9 @@ function spawnEnemy() {
       speed: rand(1.0, 1.7),
       touchDps: 0.22,
       color: "#ff8c1a",
-      faceColor: "#5a2a00"
+      faceColor: "#5a2a00",
+      hitFlash: 0,
+      attackFlash: 0
     });
   } else {
     game.enemies.push({
@@ -81,7 +84,9 @@ function spawnEnemy() {
       speed: rand(0.8, 1.4),
       touchDps: 0.12,
       color: "#2cff2c",
-      faceColor: "#083808"
+      faceColor: "#083808",
+      hitFlash: 0,
+      attackFlash: 0
     });
   }
 }
@@ -101,7 +106,9 @@ function spawnBoss() {
     maxHp: 1400,
     speed: 0.8,
     touchDps: 0.35,
-    shootCd: 0
+    shootCd: 0,
+    hitFlash: 0,
+    attackFlash: 0
   };
   game.bossSpawned = true;
   bossUi.style.display = "block";
@@ -136,12 +143,32 @@ function melee() {
   if (game.over || player.meleeCd > 0) return;
   player.meleeCd = 18;
 
+  // Determine attack direction
+  let dx = player.dirX;
+  let dy = player.dirY;
+  if (dx === 0 && dy === 0) dy = 1;
+  const angle = Math.atan2(dy, dx);
+
+  // Spawn melee slash animation
+  game.meleeSlashes.push({
+    x: player.x,
+    y: player.y,
+    angle,
+    life: 18,
+    maxLife: 18,
+    r: 58
+  });
+
   for (const e of game.enemies) {
-    if (Math.hypot(e.x - player.x, e.y - player.y) < 58) e.hp -= 18;
+    if (Math.hypot(e.x - player.x, e.y - player.y) < 58) {
+      e.hp -= 18;
+      e.hitFlash = 10;
+    }
   }
 
   if (game.boss && Math.hypot(game.boss.x - player.x, game.boss.y - player.y) < 72) {
     game.boss.hp -= 16;
+    game.boss.hitFlash = 10;
   }
 }
 
@@ -304,6 +331,12 @@ function update() {
     if (player.reload === 0) player.ammo = 3;
   }
 
+  // Update melee slashes
+  for (const slash of game.meleeSlashes) {
+    slash.life--;
+  }
+  game.meleeSlashes = game.meleeSlashes.filter(s => s.life > 0);
+
   for (const s of game.shots) {
     s.x += s.vx;
     s.y += s.vy;
@@ -378,10 +411,15 @@ function update() {
     e.x += (dx / d) * e.speed;
     e.y += (dy / d) * e.speed;
 
+    if (e.hitFlash > 0) e.hitFlash--;
+
     if (d < e.r + player.r) {
       player.hp -= e.touchDps;
       player.lastHitTime = performance.now();
+      e.attackFlash = 8;
       if (player.hp <= 0) { player.hp = 0; game.over = true; }
+    } else {
+      if (e.attackFlash > 0) e.attackFlash--;
     }
   }
 
@@ -394,10 +432,15 @@ function update() {
     b.x += (dx / d) * b.speed;
     b.y += (dy / d) * b.speed;
 
+    if (b.hitFlash > 0) b.hitFlash--;
+
     if (d < b.r + player.r) {
       player.hp -= b.touchDps;
       player.lastHitTime = performance.now();
+      b.attackFlash = 8;
       if (player.hp <= 0) { player.hp = 0; game.over = true; }
+    } else {
+      if (b.attackFlash > 0) b.attackFlash--;
     }
 
     if (b.shootCd > 0) b.shootCd--;
@@ -538,6 +581,42 @@ function drawMeteorRock(m) {
   ctx.restore();
 }
 
+// Draw the melee slash arc
+function drawMeleeSlash(slash) {
+  const t = slash.life / slash.maxLife; // 1 -> 0 as it fades
+  const alpha = t * 0.9;
+  const arcSpan = Math.PI * 0.85;
+  const startAngle = slash.angle - arcSpan / 2;
+  const endAngle = slash.angle + arcSpan / 2;
+
+  ctx.save();
+
+  // Outer glow arc
+  ctx.beginPath();
+  ctx.arc(slash.x, slash.y, slash.r, startAngle, endAngle);
+  ctx.strokeStyle = `rgba(255, 255, 200, ${alpha * 0.35})`;
+  ctx.lineWidth = 18;
+  ctx.lineCap = "round";
+  ctx.stroke();
+
+  // Main slash arc
+  ctx.beginPath();
+  ctx.arc(slash.x, slash.y, slash.r, startAngle, endAngle);
+  ctx.strokeStyle = `rgba(255, 255, 255, ${alpha})`;
+  ctx.lineWidth = 5;
+  ctx.lineCap = "round";
+  ctx.stroke();
+
+  // Inner bright core
+  ctx.beginPath();
+  ctx.arc(slash.x, slash.y, slash.r * 0.75, startAngle + 0.1, endAngle - 0.1);
+  ctx.strokeStyle = `rgba(220, 240, 255, ${alpha * 0.6})`;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  ctx.restore();
+}
+
 function draw() {
   const shakeX = game.screenShake > 0 ? rand(-game.screenShake * 0.5, game.screenShake * 0.5) : 0;
   const shakeY = game.screenShake > 0 ? rand(-game.screenShake * 0.5, game.screenShake * 0.5) : 0;
@@ -561,6 +640,11 @@ function draw() {
     ctx.strokeStyle = `rgba(180, 245, 255, ${0.55 * a})`;
     ctx.lineWidth = 3;
     ctx.stroke();
+  }
+
+  // Draw melee slashes (behind enemies)
+  for (const slash of game.meleeSlashes) {
+    drawMeleeSlash(slash);
   }
 
   for (const d of game.meteorDust) {
@@ -602,10 +686,37 @@ function draw() {
   }
 
   for (const e of game.enemies) {
+    // Attack flash: red glow ring when damaging player
+    if (e.attackFlash > 0) {
+      const af = e.attackFlash / 8;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 6, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 60, 0, ${0.55 * af})`;
+      ctx.fill();
+    }
+
+    // Hit flash: white halo behind the enemy body
+    if (e.hitFlash > 0) {
+      const hf = e.hitFlash / 10;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r + 2, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.7 * hf})`;
+      ctx.fill();
+    }
+
     ctx.fillStyle = e.color;
     ctx.beginPath();
     ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
     ctx.fill();
+
+    // White overlay on body when hit
+    if (e.hitFlash > 0) {
+      const hf = e.hitFlash / 10;
+      ctx.beginPath();
+      ctx.arc(e.x, e.y, e.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.55 * hf})`;
+      ctx.fill();
+    }
 
     drawFace(e.x, e.y, e.type === "orange" ? 1.0 : 0.9, e.faceColor);
 
@@ -617,10 +728,38 @@ function draw() {
 
   if (game.boss) {
     const b = game.boss;
+
+    // Boss attack flash
+    if (b.attackFlash > 0) {
+      const af = b.attackFlash / 8;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 10, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 40, 0, ${0.5 * af})`;
+      ctx.fill();
+    }
+
+    // Boss hit flash
+    if (b.hitFlash > 0) {
+      const hf = b.hitFlash / 10;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r + 4, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.65 * hf})`;
+      ctx.fill();
+    }
+
     ctx.fillStyle = "#a64dff";
     ctx.beginPath();
     ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
     ctx.fill();
+
+    if (b.hitFlash > 0) {
+      const hf = b.hitFlash / 10;
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(255, 255, 255, ${0.5 * hf})`;
+      ctx.fill();
+    }
+
     drawFace(b.x, b.y, 2.5, "#2a003d");
   }
 
@@ -661,6 +800,7 @@ function restart() {
   game.meteorDust = [];
   game.impactDust = [];
   game.screenShake = 0;
+  game.meleeSlashes = [];
   bossUi.style.display = "none";
 
   player.x = canvas.width / 2;
