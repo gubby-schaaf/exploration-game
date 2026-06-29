@@ -249,7 +249,7 @@ function meteorStrike() {
 function applyMeteorImpact(mx, my) {
   for (const e of game.enemies) {
     if (e.hp > 0) {
-      const whole = Math.ceil(e.maxHp * 1,0 );
+      const half = Math.ceil(e.maxHp * 0.5 );
       e.hp = Math.min(e.hp, half);
     }
   }
