@@ -531,6 +531,8 @@ function update() {
   if (game.boss) {
     bossBar.style.width = `${Math.max(0, (game.boss.hp / game.boss.maxHp) * 100)}%`;
   }
+
+  net.emitState();
 }
 
 function drawFace(x, y, scale = 1, color = "#000") {
@@ -763,6 +765,8 @@ function draw() {
     drawFace(b.x, b.y, 2.5, "#2a003d");
   }
 
+  net.drawRemotePlayers();
+
   ctx.fillStyle = "#e6d4a8";
   ctx.beginPath();
   ctx.arc(player.x, player.y, player.r, 0, Math.PI * 2);
@@ -833,6 +837,15 @@ window.addEventListener("keyup", (e) => {
 
 canvas.addEventListener("click", melee);
 
+// ─── Multiplayer networking ────────────────────────────────────────────────────
+// Connects to the Socket.IO server when available. If the server is not running
+// the game continues in single-player mode — no errors, no blocked gameplay.
+//
+// net is declared as a stub before loop() starts so update() and draw() can
+// call its methods safely. initNet() replaces the stubs synchronously before
+// the next animation frame fires.
+const net = { emitState() {}, drawRemotePlayers() {} };
+
 function loop() {
   update();
   draw();
@@ -840,3 +853,146 @@ function loop() {
 }
 
 loop();
+
+(function initNet() {
+  const SYNC_MS = 100; // minimum ms between state emissions
+  const REMOTE_COLORS = ["#4ecdc4", "#45b7d1", "#f7b731", "#a55eea", "#26de81", "#fd9644"];
+
+  // Other connected players: socket-id -> { id, name, x, y, kills, hp }
+  const remotePlayers = new Map();
+
+  const lbPanel = document.getElementById("leaderboard");
+  const lbList = document.getElementById("lbList");
+  const nameOverlay = document.getElementById("nameOverlay");
+  const nameInput = document.getElementById("nameInput");
+  const nameBtn = document.getElementById("nameBtn");
+
+  let socket = null;
+  let lastSync = 0;
+
+  // Pick a stable color for a remote player based on their socket id
+  function remoteColor(id) {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+    return REMOTE_COLORS[h % REMOTE_COLORS.length];
+  }
+
+  function updateLeaderboard(entries) {
+    if (!lbList || !lbPanel) return;
+    lbPanel.style.display = "block";
+    lbList.innerHTML = "";
+    for (const e of entries) {
+      const li = document.createElement("li");
+      li.appendChild(document.createTextNode(`${e.name}  \u2014  ${e.kills}`));
+      lbList.appendChild(li);
+    }
+  }
+
+  // Called once per game-loop tick from update()
+  net.emitState = function emitState() {
+    if (!socket || !socket.connected) return;
+    const now = performance.now();
+    if (now - lastSync < SYNC_MS) return;
+    lastSync = now;
+    socket.emit("player:update", {
+      x: Math.round(player.x),
+      y: Math.round(player.y),
+      kills: game.killed,
+      hp: Math.round(player.hp)
+    });
+  };
+
+  // Called once per game-loop tick from draw(), renders all remote players
+  net.drawRemotePlayers = function drawRemotePlayers() {
+    for (const [id, p] of remotePlayers) {
+      const col = remoteColor(id);
+
+      // Body
+      ctx.fillStyle = col;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 13, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Face (reuse existing helper)
+      drawFace(p.x, p.y, 1, "#000");
+
+      // Name label
+      ctx.fillStyle = "#fff";
+      ctx.font = "11px Arial";
+      ctx.textAlign = "center";
+      ctx.fillText(p.name, p.x, p.y - 18);
+      ctx.textAlign = "left";
+    }
+  };
+
+  function connect(name) {
+    if (nameOverlay) nameOverlay.style.display = "none";
+
+    // io() is provided by /socket.io/socket.io.js served from the game server.
+    // When the server is not running the script tag fails to load, io is
+    // undefined, and we silently stay in single-player mode.
+    if (typeof io === "undefined") {
+      console.info("[net] Server not available — single-player mode");
+      return;
+    }
+
+    socket = io({ timeout: 4000, reconnectionAttempts: 3 });
+
+    socket.on("connect", () => {
+      socket.emit("player:join", { name });
+    });
+
+    socket.on("connect_error", () => {
+      console.info("[net] Could not reach server — single-player mode");
+    });
+
+    socket.on("player:welcome", ({ players: all }) => {
+      for (const p of all) {
+        if (p.id !== socket.id) remotePlayers.set(p.id, p);
+      }
+    });
+
+    socket.on("player:joined", (p) => remotePlayers.set(p.id, p));
+
+    socket.on("player:state", (p) => {
+      const existing = remotePlayers.get(p.id);
+      if (existing) Object.assign(existing, p);
+    });
+
+    socket.on("player:left", ({ id }) => remotePlayers.delete(id));
+
+    socket.on("leaderboard:update", updateLeaderboard);
+  }
+
+  // Sanitize the name client-side (server also validates)
+  function startWithName(raw) {
+    const name = (typeof raw === "string" ? raw : "")
+      .replace(/[^\x20-\x7E]/g, "")
+      .trim()
+      .slice(0, 20) || "Player";
+    connect(name);
+  }
+
+  if (nameBtn) {
+    nameBtn.addEventListener("click", () => {
+      clearTimeout(autoTimer);
+      startWithName(nameInput ? nameInput.value : "");
+    });
+  }
+
+  if (nameInput) {
+    nameInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") {
+        clearTimeout(autoTimer);
+        startWithName(nameInput.value);
+      }
+    });
+  }
+
+  // Auto-dismiss after 6 s so single-player users are not blocked
+  const autoTimer = setTimeout(() => {
+    if (nameOverlay && nameOverlay.style.display !== "none") {
+      startWithName(nameInput ? nameInput.value : "");
+    }
+  }, 6000);
+}());

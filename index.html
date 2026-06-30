@@ -24,6 +24,24 @@
     <div class="barWrap"><div id="bossBar" class="barFill"></div></div>
   </div>
 
+  <!-- Name-entry overlay (dismissed once the player clicks Play or after auto-timeout) -->
+  <div id="nameOverlay">
+    <div id="nameBox">
+      <h2>Enter Your Name</h2>
+      <input id="nameInput" type="text" maxlength="20" placeholder="Player" autocomplete="off" />
+      <button id="nameBtn">Play</button>
+      <p id="nameHint">Multiplayer requires the game server to be running.<br>Single-player works without it.</p>
+    </div>
+  </div>
+
+  <!-- Leaderboard panel (populated by the server in multiplayer; hidden in solo) -->
+  <div id="leaderboard">
+    <div id="lbTitle">Leaderboard</div>
+    <ol id="lbList"></ol>
+  </div>
+
   <script src="game.js"></script>
+  <!-- Socket.IO client — served by server/server.js. Loads silently in single-player. -->
+  <script src="/socket.io/socket.io.js" onerror="window._socketIoMissing=true"></script>
 </body>
 </html>
