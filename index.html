@@ -3,27 +3,101 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Exploration Game :3</title>
-  <link rel="stylesheet" href="style.css" />
+  <title>Exploration Game</title>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      background: #111;
+      color: #eee;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+    }
+
+    #ui {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.45);
+      padding: 10px 12px;
+      border-radius: 10px;
+      line-height: 1.5;
+      z-index: 20;
+      min-width: 210px;
+    }
+
+    #bossUi {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      width: min(640px, 70vw);
+      display: none;
+      z-index: 25;
+    }
+
+    #bossBarWrap {
+      width: 100%;
+      height: 18px;
+      background: #2d103f;
+      border: 2px solid #b575ff;
+      border-radius: 999px;
+      overflow: hidden;
+      box-shadow: 0 0 12px rgba(181, 117, 255, 0.35);
+    }
+
+    #bossBar {
+      width: 100%;
+      height: 100%;
+      background: linear-gradient(90deg, #d591ff, #a64dff);
+      transition: width 0.12s linear;
+    }
+
+    #tips {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      background: rgba(0,0,0,0.35);
+      padding: 8px 10px;
+      border-radius: 8px;
+      font-size: 14px;
+      z-index: 20;
+    }
+
+    #gameCanvas {
+      display: block;
+      margin: 0 auto;
+      background: #2b241f;
+      border: 2px solid #333;
+    }
+  </style>
 </head>
 <body>
-  <canvas id="gameCanvas" width="1100" height="700"></canvas>
-
   <div id="ui">
-    <div>Health: <span id="health">100</span>/100</div>
-    <div>Enemies Killed: <span id="killed">0</span></div>
-    <div>W/A/S/D or Arrow Keys move | Click melee | Space shoot | X shockwave | M meteor</div>
+    <div>Health: <span id="health">100</span></div>
+    <div>Killed: <span id="killed">0</span></div>
+    <div>Ammo: <span id="ammoCount">3</span></div>
+    <div>Shockwave (X): <span id="shockStatus">READY</span></div>
+    <div>Meteor (M): <span id="meteorStatus">READY</span></div>
   </div>
-
-  <div id="ammo">Arrows: <span id="ammoCount">3</span>/3</div>
-  <div id="special">Shockwave: <span id="shockStatus">READY</span></div>
-  <div id="meteor">Meteor: <span id="meteorStatus">READY</span></div>
 
   <div id="bossUi">
-    <div>Boss: Giga Slime</div>
-    <div class="barWrap"><div id="bossBar" class="barFill"></div></div>
+    <div id="bossBarWrap">
+      <div id="bossBar"></div>
+    </div>
   </div>
 
-  <script src="game.js"></script>
+  <div id="tips">
+    Move: WASD / Arrows · Shoot: Space · Melee: Click · Shockwave: X · Meteor: M · Restart: R
+  </div>
+
+  <!-- Keep your existing canvas id for game.js -->
+  <canvas id="gameCanvas" width="1000" height="600"></canvas>
+
+  <!-- REQUIRED for LAN mode -->
+  <script src="/socket.io/socket.io.js"></script>
+
+  <!-- Your merged game file -->
+  <script src="./game.js"></script>
 </body>
 </html>
