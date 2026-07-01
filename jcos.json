@@ -1,0 +1,23 @@
+[
+  {
+    "name": "PlayerOne",
+    "score": 42,
+    "hp": 100,
+    "over": false,
+    "updatedAt": "2026-06-30T20:00:00.000Z"
+  },
+  {
+    "name": "LANFriend",
+    "score": 37,
+    "hp": 0,
+    "over": true,
+    "updatedAt": "2026-06-30T20:01:00.000Z"
+  },
+  {
+    "name": "ExplorerX",
+    "score": 25,
+    "hp": 64,
+    "over": false,
+    "updatedAt": "2026-06-30T20:02:00.000Z"
+  }
+]
