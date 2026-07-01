@@ -1,18 +1,21 @@
 (() => {
-  const LEADERBOARD_KEY = "exploration_leaderboard_v2";
-  const ROOM_KEY = "exploration_room_name";
+  const LEADERBOARD_KEY = "exploration_leaderboard_v3";
 
-  // Optional UI ids (works even if some are missing)
-  const leaderboardList = document.getElementById("leaderboardList");
   const playerNameInput = document.getElementById("playerNameInput");
-  const roomInput = document.getElementById("roomInput");
-  const exportBtn = document.getElementById("exportLeaderboardBtn");
-  const importInput = document.getElementById("importLeaderboardInput");
-  const clearBtn = document.getElementById("clearLeaderboardBtn");
+  const openLanBtn = document.getElementById("openLanBtn");
+  const refreshLanBtn = document.getElementById("refreshLanBtn");
+  const lanStatus = document.getElementById("lanStatus");
+  const lanGamesList = document.getElementById("lanGamesList");
+  const leaderboardList = document.getElementById("leaderboardList");
+
+  const socket = window.io ? window.io() : null;
 
   let board = loadBoard();
-  let roomName = localStorage.getItem(ROOM_KEY) || "default-room";
-  let channel = null;
+  let currentRoom = null;
+
+  function setStatus(text) {
+    if (lanStatus) lanStatus.textContent = text;
+  }
 
   function loadBoard() {
     try {
@@ -28,6 +31,11 @@
     localStorage.setItem(LEADERBOARD_KEY, JSON.stringify(board));
   }
 
+  function getPlayerName() {
+    const val = (playerNameInput?.value || localStorage.getItem("playerName") || "Player").trim();
+    return val || "Player";
+  }
+
   function normalizeEntry(e) {
     return {
       name: String(e?.name || "Player").trim() || "Player",
@@ -40,35 +48,24 @@
 
   function upsertScore(entry) {
     const n = normalizeEntry(entry);
-    const idx = board.findIndex(
-      (x) => x.name.toLowerCase() === n.name.toLowerCase()
-    );
+    const idx = board.findIndex((x) => x.name.toLowerCase() === n.name.toLowerCase());
 
     if (idx === -1) {
       board.push(n);
+    } else if (
+      n.score > board[idx].score ||
+      (n.score === board[idx].score && Number(!n.over) > Number(!board[idx].over))
+    ) {
+      board[idx] = n;
     } else {
-      const prev = board[idx];
-      // better score wins; on tie prefer still alive; then latest
-      const better =
-        n.score > prev.score ||
-        (n.score === prev.score && Number(!n.over) > Number(!prev.over));
-
-      if (better) {
-        board[idx] = n;
-      } else if (n.updatedAt > prev.updatedAt) {
-        board[idx].updatedAt = n.updatedAt;
-        board[idx].hp = n.hp;
-        board[idx].over = n.over;
-      }
+      board[idx].hp = n.hp;
+      board[idx].over = n.over;
+      board[idx].updatedAt = n.updatedAt;
     }
 
-    board.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      if (a.over !== b.over) return Number(a.over) - Number(b.over);
-      return (b.updatedAt || "").localeCompare(a.updatedAt || "");
-    });
-
+    board.sort((a, b) => b.score - a.score || Number(a.over) - Number(b.over));
     board = board.slice(0, 25);
+
     saveBoard();
     renderBoard();
   }
@@ -79,120 +76,133 @@
 
     if (!board.length) {
       const li = document.createElement("li");
-      li.textContent = "No leaderboard data yet.";
+      li.textContent = "No scores yet.";
       leaderboardList.appendChild(li);
       return;
     }
 
     board.forEach((row, i) => {
       const li = document.createElement("li");
-      const status = row.over ? "💀" : "🟢";
-      li.textContent = `#${i + 1} ${status} ${row.name} — ${row.score} kills (HP ${Math.max(0, Math.round(row.hp))})`;
+      li.textContent = `#${i + 1} ${row.over ? "💀" : "🟢"} ${row.name} — ${row.score} kills`;
       leaderboardList.appendChild(li);
     });
   }
 
-  function openRoom(name) {
-    if (channel) channel.close();
-    channel = new BroadcastChannel(`exploration-game:${name}`);
+  function renderLanGames(hosts) {
+    if (!lanGamesList) return;
+    lanGamesList.innerHTML = "";
 
-    channel.onmessage = (event) => {
-      const msg = event.data || {};
-      if (msg.type === "score" && msg.payload) {
-        upsertScore(msg.payload);
-      } else if (msg.type === "sync-request") {
-        channel.postMessage({ type: "sync-state", payload: board });
-      } else if (msg.type === "sync-state" && Array.isArray(msg.payload)) {
-        for (const row of msg.payload) upsertScore(row);
-      }
-    };
+    if (!hosts.length) {
+      const li = document.createElement("li");
+      li.textContent = "No LAN games found.";
+      lanGamesList.appendChild(li);
+      return;
+    }
 
-    channel.postMessage({ type: "sync-request" });
+    hosts.forEach((host) => {
+      const li = document.createElement("li");
+      const btn = document.createElement("button");
+      btn.textContent = `Join "${host.hostName}"`;
+      btn.addEventListener("click", () => {
+        if (!socket) return;
+        socket.emit("lan:join", {
+          hostId: host.hostId,
+          playerName: getPlayerName()
+        });
+      });
+
+      const label = document.createElement("span");
+      label.textContent = `  (${host.roomName})`;
+
+      li.appendChild(btn);
+      li.appendChild(label);
+      lanGamesList.appendChild(li);
+    });
   }
 
-  function broadcastScore(payload) {
-    if (!channel) return;
-    channel.postMessage({ type: "score", payload: normalizeEntry(payload) });
-  }
-
-  // Hook score updates from game.js
-  window.addEventListener("score:update", (e) => {
-    const payload = e.detail || {};
-    upsertScore(payload);
-    broadcastScore(payload);
-  });
-
-  // Player name hookup
   if (playerNameInput) {
-    const existing = localStorage.getItem("playerName") || "Player";
-    playerNameInput.value = existing;
-    if (window.gameState?.setPlayerName) window.gameState.setPlayerName(existing);
+    const saved = localStorage.getItem("playerName") || "Player";
+    playerNameInput.value = saved;
+
+    if (window.gameState?.setPlayerName) {
+      window.gameState.setPlayerName(saved);
+    }
 
     playerNameInput.addEventListener("change", () => {
-      const name = playerNameInput.value.trim() || "Player";
-      localStorage.setItem("playerName", name);
-      if (window.gameState?.setPlayerName) window.gameState.setPlayerName(name);
+      const n = getPlayerName();
+      localStorage.setItem("playerName", n);
+      if (window.gameState?.setPlayerName) window.gameState.setPlayerName(n);
       if (window.gameState?.forceEmitScore) window.gameState.forceEmitScore();
     });
   }
 
-  // Room hookup
-  if (roomInput) {
-    roomInput.value = roomName;
-    roomInput.addEventListener("change", () => {
-      roomName = roomInput.value.trim() || "default-room";
-      localStorage.setItem(ROOM_KEY, roomName);
-      openRoom(roomName);
+  if (openLanBtn) {
+    openLanBtn.addEventListener("click", () => {
+      if (!socket) return setStatus("Socket.IO not connected.");
+
+      const hostName = getPlayerName();
+      const roomName = `room-${hostName.toLowerCase().replace(/\s+/g, "-")}-${Math.floor(Math.random() * 9999)}`;
+
+      socket.emit("lan:open", { hostName, roomName });
+    });
+  }
+
+  if (refreshLanBtn) {
+    refreshLanBtn.addEventListener("click", () => {
+      if (!socket) return setStatus("Socket.IO not connected.");
+      socket.emit("lan:list");
+    });
+  }
+
+  if (socket) {
+    socket.on("connect", () => {
+      setStatus("Connected. Click 'Refresh LAN Games'.");
+      socket.emit("lan:list");
+    });
+
+    socket.on("lan:list:result", (hosts) => {
+      renderLanGames(Array.isArray(hosts) ? hosts : []);
+    });
+
+    socket.on("lan:opened", (hostInfo) => {
+      currentRoom = hostInfo.roomName;
+      setStatus(`LAN open as "${hostInfo.hostName}" (${hostInfo.roomName})`);
       if (window.gameState?.forceEmitScore) window.gameState.forceEmitScore();
     });
-  }
 
-  // Export JSON
-  if (exportBtn) {
-    exportBtn.addEventListener("click", () => {
-      const blob = new Blob([JSON.stringify(board, null, 2)], { type: "application/json" });
-      const a = document.createElement("a");
-      a.href = URL.createObjectURL(blob);
-      a.download = "jcos.json";
-      a.click();
-      URL.revokeObjectURL(a.href);
+    socket.on("lan:joined", ({ roomName, hostName }) => {
+      currentRoom = roomName;
+      setStatus(`Joined "${hostName}" in room ${roomName}`);
+      if (window.gameState?.forceEmitScore) window.gameState.forceEmitScore();
     });
-  }
 
-  // Import JSON
-  if (importInput) {
-    importInput.addEventListener("change", async () => {
-      const file = importInput.files?.[0];
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const parsed = JSON.parse(text);
-        if (Array.isArray(parsed)) {
-          for (const row of parsed) upsertScore(row);
-        }
-      } catch (err) {
-        console.error("Import failed:", err);
-      } finally {
-        importInput.value = "";
-      }
+    socket.on("lan:error", ({ message }) => {
+      setStatus(message || "LAN error.");
     });
-  }
 
-  // Clear leaderboard
-  if (clearBtn) {
-    clearBtn.addEventListener("click", () => {
-      board = [];
-      saveBoard();
-      renderBoard();
+    socket.on("game:update", (payload) => {
+      upsertScore(payload);
     });
+
+    socket.on("lan:player-joined", ({ playerName }) => {
+      setStatus(`${playerName} joined your LAN game.`);
+    });
+  } else {
+    setStatus("Socket.IO client missing. Add /socket.io/socket.io.js.");
   }
 
-  // boot
+  window.addEventListener("score:update", (e) => {
+    const payload = {
+      ...normalizeEntry(e.detail || {}),
+      name: getPlayerName()
+    };
+
+    upsertScore(payload);
+
+    if (socket && currentRoom) {
+      socket.emit("game:update", { roomName: currentRoom, payload });
+    }
+  });
+
   renderBoard();
-  openRoom(roomName);
-
-  // If game already loaded, emit once
-  setTimeout(() => {
-    if (window.gameState?.forceEmitScore) window.gameState.forceEmitScore();
-  }, 50);
 })();
