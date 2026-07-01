@@ -64,6 +64,31 @@
       z-index: 20;
     }
 
+    #lanPanel {
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      background: rgba(0,0,0,.45);
+      padding: 10px;
+      border-radius: 10px;
+      z-index: 30;
+      min-width: 280px;
+      max-width: 340px;
+    }
+
+    #lanPanel input, #lanPanel button {
+      font-size: 14px;
+    }
+
+    #lanPanel button {
+      cursor: pointer;
+    }
+
+    #lanGamesList, #leaderboardList {
+      max-height: 150px;
+      overflow: auto;
+    }
+
     #gameCanvas {
       display: block;
       margin: 0 auto;
@@ -91,13 +116,30 @@
     Move: WASD / Arrows · Shoot: Space · Melee: Click · Shockwave: X · Meteor: M · Restart: R
   </div>
 
-  <!-- Keep your existing canvas id for game.js -->
+  <div id="lanPanel">
+    <div style="margin-bottom:8px;">
+      <label for="playerNameInput">Name:</label>
+      <input id="playerNameInput" type="text" placeholder="Player name" />
+    </div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+      <button id="openLanBtn">Open to LAN</button>
+      <button id="refreshLanBtn">Refresh LAN Games</button>
+    </div>
+
+    <div id="lanStatus" style="font-size:13px;opacity:.9;margin-bottom:8px;">Not connected.</div>
+
+    <div style="margin-bottom:4px;"><strong>Join LAN Game</strong></div>
+    <ul id="lanGamesList" style="margin:0 0 10px 18px;padding:0;"></ul>
+
+    <div><strong>Leaderboard</strong></div>
+    <ol id="leaderboardList" style="margin:6px 0 0 18px;padding:0;"></ol>
+  </div>
+
   <canvas id="gameCanvas" width="1000" height="600"></canvas>
 
-  <!-- REQUIRED for LAN mode -->
   <script src="/socket.io/socket.io.js"></script>
-
-  <!-- Your merged game file -->
   <script src="./game.js"></script>
+  <script src="./script.js"></script>
 </body>
 </html>
